@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Cross Border",
+    "slug": "cross-border",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "MYFINTECH",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "buildNumber": "4",
+      "bundleIdentifier": "com.onswinfinserv.onswinfintech"
+    },
+    "android": {
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.onswinfinserv.onswinfintech",
+      "versionCode": 4
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "owner": "nateshkumar",
+    "runtimeVersion": "1.0.1",
+    "updates": {
+      "url": "https://u.expo.dev/349797bf-89c3-419b-9097-50b5b407f96d"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "349797bf-89c3-419b-9097-50b5b407f96d"
+      },
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+export type TransactionModel = {
+    Amount: string,
+    Currency: string,
+    DestinationCountry: string,
+    ReceiverFirstName: string,
+    ReceiverID: string,
+    ReceiverLastName: string,
+    SenderFirstName: string,
+    SenderID: string,
+    SenderLastName: string,
+    SourceCountry: string,
+    TranStatus: string,
+    TransID: string,
+    TransactionDate: Date,
+    TransactionMode: string,
+    TransactionPurpose: string,
+    TransferType: string,
+};
