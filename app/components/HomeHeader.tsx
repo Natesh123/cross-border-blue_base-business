@@ -91,7 +91,7 @@ const HomeHeader = ({ reward, currency }: IProps) => {
     if (isFocused) fetchNotifications();
   }, [isFocused]);
 
-  const hasUnread = notifications.some((n) => n.unread);
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   return (
     <View style={localStyles.topContainer}>
@@ -122,7 +122,13 @@ const HomeHeader = ({ reward, currency }: IProps) => {
             style={localStyles.roundActionBtn}
           >
             <Vector as="ionicons" name="notifications-outline" size={22} color="#ffffff" />
-            {hasUnread && <View style={localStyles.badgeSignal} />}
+            {unreadCount > 0 && (
+              <View style={localStyles.badgeSignal}>
+                <Text style={localStyles.badgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -230,14 +236,22 @@ const localStyles = StyleSheet.create({
   },
   badgeSignal: {
     position: 'absolute',
-    top: 13,
-    right: 13,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: '#ef4444',
     borderWidth: 1.5,
     borderColor: '#0ea5e9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontFamily: FONTS.bold,
   },
   heroCore: {
     alignItems: 'center',

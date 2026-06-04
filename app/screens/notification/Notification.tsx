@@ -18,10 +18,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown, FadeInUp, Layout, FadeInRight } from "react-native-reanimated";
 
 import { ProfileState } from "../../atoms";
-import { GetNotificationListInfo, UpdateNotification } from "app/http-services";
+import { GetNotificationListInfo, UpdateNotification, GetTransactionDetails } from "app/http-services";
 import { FONTS, SIZES, SHADOWS } from "app/constants/Assets";
 import { RFValue } from "react-native-responsive-fontsize";
 import Vector from "app/assets/vectors";
+import moment from "moment";
+import CountryFlag from "react-native-country-flag";
+
+const getCountryISO2 = require("country-iso-3-to-2");
 
 const { width } = Dimensions.get("window");
 
@@ -40,6 +44,30 @@ const Notification = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
+
+      // 1. Fetch Transactions first
+      let recentTransactions: any[] = [];
+      try {
+        const txnReq = {
+          tokenId: currentToken.tokenId,
+          remitterId: currentToken.remitterId,
+          fromDate: "",
+          toDate: moment().format("YYYY-MM-DD"),
+          numberTranList: "0",
+          tranList: "COUNT",
+          transId: "",
+          transactionType: "MONEY_REMITTANCE",
+          walletMode: "Sendmoney",
+        };
+        const txnRes: any = await GetTransactionDetails(txnReq);
+        if (txnRes?.status === 200) {
+          recentTransactions = txnRes.data?.TransDetails || [];
+        }
+      } catch (err) {
+        console.error("Error fetching transactions for notifications:", err);
+      }
+
+      // 2. Fetch Notifications
       const response = await GetNotificationListInfo({});
       const data = response?.data?.Notifications || [];
 
@@ -61,6 +89,53 @@ const Notification = () => {
       const mappedNotifications = data.map((item: any) => {
         const storageKey = `notification_${item.NotificationLogId}`;
         const localItem = localStatus[storageKey];
+        const isTxn = item.NotificationMasterId === 4 || item.NotificationMasterId === "4";
+
+        let matchedTxn = null;
+        if (isTxn && recentTransactions.length > 0) {
+          // Sort transactions by date descending to find the closest match
+          const txnsByDate = [...recentTransactions].sort((a, b) =>
+            moment(b.TransactionDate).diff(moment(a.TransactionDate))
+          );
+
+          // Try direct mapping first
+          matchedTxn = txnsByDate.find((t: any) =>
+            (item.TransID && t.TransID === item.TransID) ||
+            (item.TransactionId && t.TransID === item.TransactionId) ||
+            (item.ReferenceId && t.TransID === item.ReferenceId) ||
+            (item.NotificationMessage && t.TransID && item.NotificationMessage.includes(t.TransID))
+          );
+
+          // If no direct mapping exists (e.g., message is just "Transaction done Successfully"),
+          // fallback to matching by closest time
+          if (!matchedTxn && item.NotificationCreatedDate) {
+            matchedTxn = txnsByDate.find((t: any) => {
+              if (!t.TransactionDate) return false;
+              const tDate = moment(t.TransactionDate, ["YYYY-MM-DD hh:mm:ss A", "M/D/YYYY h:mm:ss A", moment.ISO_8601], true);
+              const nDate = moment(item.NotificationCreatedDate, ["YYYY-MM-DD hh:mm:ss A", "M/D/YYYY h:mm:ss A", moment.ISO_8601], true);
+
+              const validT = tDate.isValid() ? tDate : moment(t.TransactionDate);
+              const validN = nDate.isValid() ? nDate : moment(item.NotificationCreatedDate);
+
+              if (validT.isValid() && validN.isValid()) {
+                // Match within 12 hours instead of 5 minutes just to be safe
+                return Math.abs(validT.diff(validN, 'hours')) <= 12;
+              }
+              return false;
+            });
+          }
+
+          // Ultimate Fallback: Just pop the first transaction from the list if it's still null!
+          if (!matchedTxn && txnsByDate.length > 0) {
+            matchedTxn = txnsByDate[0];
+          }
+        }
+
+        // Ensure we remove the matched transaction from the list so it doesn't get mapped twice
+        if (matchedTxn) {
+          recentTransactions = recentTransactions.filter((t: any) => t.TransID !== matchedTxn.TransID);
+        }
+
         return {
           id: item.NotificationLogId,
           masterId: item.NotificationMasterId,
@@ -71,6 +146,7 @@ const Notification = () => {
             localItem?.unread !== undefined
               ? localItem.unread
               : item.NotificationIsread === "False",
+          transactionData: matchedTxn || null
         };
       });
 
@@ -124,6 +200,104 @@ const Notification = () => {
     const dateParts = item.time.split(" ");
     const dateStr = dateParts[0];
     const timeStr = dateParts.slice(1).join(" ");
+
+    // Render Rich Transaction Card
+    if (item.type === "Transaction" && item.transactionData) {
+      const txn = item.transactionData;
+      const isSuccess = txn.TranStatus === "Success";
+      const isFailed = txn.TranStatus === "Failed" || txn.TranStatus === "Rejected";
+
+      return (
+        <Animated.View
+          key={item.id}
+          entering={FadeInRight.delay(index * 100).duration(500)}
+          layout={Layout.springify()}
+        >
+          <TouchableOpacity
+            onPress={() => handleNotificationPress(item)}
+            activeOpacity={0.8}
+            style={[styles.richCardContainer, item.unread && styles.richCardUnread]}
+          >
+            {/* Status Header */}
+            <View style={[
+              styles.richCardHeader,
+              { backgroundColor: isSuccess ? "#f0fdf4" : isFailed ? "#fef2f2" : "#fffbeb" }
+            ]}>
+              <Vector
+                as="materialcommunityicons"
+                name={isSuccess ? "check-circle" : "alert-circle"}
+                size={18}
+                color={isSuccess ? "#16a34a" : isFailed ? "#dc2626" : "#d97706"}
+              />
+              <Text style={[
+                styles.richCardStatusText,
+                { color: isSuccess ? "#16a34a" : isFailed ? "#dc2626" : "#d97706" }
+              ]}>{txn.TranStatus.toUpperCase()}</Text>
+
+              {item.unread && (
+                <View style={styles.richUnreadBadge}>
+                  <Text style={styles.richUnreadText}>NEW</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Sender / Receiver Info */}
+            <View style={styles.richPartyRow}>
+              <View style={styles.richPartyItem}>
+                <Text style={styles.richPartyLabel}>Sender:</Text>
+                <Text style={styles.richPartyName} numberOfLines={1}>
+                  {txn.SenderFirstName || "User"} (GBR)
+                </Text>
+                {getCountryISO2("GBR") && (
+                  <CountryFlag isoCode={getCountryISO2("GBR")} size={14} style={styles.richFlag} />
+                )}
+              </View>
+
+              <Vector as="feather" name="arrow-right" size={16} color="#94a3b8" style={{ marginHorizontal: 8 }} />
+
+              <View style={styles.richPartyItem}>
+                <Text style={styles.richPartyLabel}>Receiver:</Text>
+                <Text style={styles.richPartyName} numberOfLines={1}>
+                  {txn.ReceiverFirstName || "Recipient"} ({txn.DestinationCountry})
+                </Text>
+                {getCountryISO2(txn.DestinationCountry) && (
+                  <CountryFlag isoCode={getCountryISO2(txn.DestinationCountry)} size={14} style={styles.richFlag} />
+                )}
+              </View>
+            </View>
+
+            {/* Amount / Mode Info */}
+            <View style={styles.richFinanceRow}>
+              <View style={styles.richFinanceItem}>
+                <Text style={styles.richFinanceLabel}>Amount Sent:</Text>
+                <Text style={styles.richFinanceValue}>{txn.Currency} {txn.Amount}</Text>
+              </View>
+              <View style={[styles.richFinanceItem, { alignItems: 'flex-end' }]}>
+                <Text style={styles.richFinanceLabel}>Receiving Mode:</Text>
+                <Text style={styles.richFinanceValueSub}>{txn.TransactionMode || "DEBIT"}</Text>
+              </View>
+            </View>
+
+            <View style={styles.dashedLine} />
+
+            {/* Footer */}
+            <View style={styles.richFooterRow}>
+              <View style={styles.richFooterLeft}>
+                <Vector as="feather" name="send" size={12} color="#64748b" />
+                <Text style={styles.richFooterTransferType}>{txn.TransferType || "MOBILE WALLET"}</Text>
+              </View>
+              <View style={styles.richFooterRight}>
+                <Text style={styles.richFooterDate}>{item.time}</Text>
+                <View style={styles.richTxnIdBox}>
+                  <Text style={styles.richTxnIdText}>{txn.TransID}</Text>
+                </View>
+              </View>
+            </View>
+
+          </TouchableOpacity>
+        </Animated.View>
+      );
+    }
 
     return (
       <Animated.View
@@ -507,6 +681,152 @@ const styles = StyleSheet.create({
     fontSize: SIZES.h3,
     fontFamily: FONTS.medium,
     color: "#cbd5e1",
+  },
+
+  // Rich Transaction Card Styles
+  richCardContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    ...SHADOWS.shadow,
+  },
+  richCardUnread: {
+    borderColor: '#0ea5e9',
+    borderLeftWidth: 4,
+    ...SHADOWS.shadow8,
+  },
+  richCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#f0fdf4', // success by default
+    position: 'relative',
+  },
+  richCardStatusText: {
+    fontSize: SIZES.p12,
+    fontFamily: FONTS.bold,
+    color: '#16a34a',
+    marginLeft: 6,
+    letterSpacing: 1,
+  },
+  richUnreadBadge: {
+    position: 'absolute',
+    right: 12,
+    backgroundColor: '#0ea5e9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  richUnreadText: {
+    fontSize: 9,
+    fontFamily: FONTS.bold,
+    color: '#fff',
+  },
+  richPartyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+  },
+  richPartyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  richPartyLabel: {
+    fontSize: SIZES.p12,
+    fontFamily: FONTS.semibold,
+    color: '#94a3b8',
+    marginRight: 4,
+  },
+  richPartyName: {
+    fontSize: SIZES.p13,
+    fontFamily: FONTS.bold,
+    color: '#1e293b',
+    flexShrink: 1,
+  },
+  richFlag: {
+    marginLeft: 4,
+    borderRadius: 2,
+  },
+  richFinanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    marginHorizontal: 12,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  richFinanceItem: {
+    flex: 1,
+  },
+  richFinanceLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.semibold,
+    color: '#94a3b8',
+    marginBottom: 2,
+  },
+  richFinanceValue: {
+    fontSize: SIZES.p14,
+    fontFamily: FONTS.bold,
+    color: '#334155',
+  },
+  richFinanceValueSub: {
+    fontSize: SIZES.p12,
+    fontFamily: FONTS.bold,
+    color: '#334155',
+  },
+  dashedLine: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    marginHorizontal: 16,
+  },
+  richFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  richFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  richFooterTransferType: {
+    fontSize: 11,
+    fontFamily: FONTS.bold,
+    color: '#64748b',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+  },
+  richFooterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  richFooterDate: {
+    fontSize: 11,
+    fontFamily: FONTS.semibold,
+    color: '#64748b',
+    marginRight: 10,
+  },
+  richTxnIdBox: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  richTxnIdText: {
+    fontSize: 10,
+    fontFamily: FONTS.bold,
+    color: '#475569',
   },
 });
 
