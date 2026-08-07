@@ -4,7 +4,7 @@
 // export const BASE_URL = "https://service.kashremit.com/CashUIMR.svc/api";
 
 
-export const BASE_URL = "https://betadev.kashremit.com/CashUIMR.svc/api";
+export const BASE_URL = "https://servicetokdev.kashremit.com/CashUIMR.svc/api";
 
 export const IPIFY = "https://api.ipify.org/?format=json";
 
@@ -103,4 +103,11 @@ export const GET_PRODUCTS = '/GetProducts';
 export const MOBILE_NUMBER_LOOKUP = "/MobileNumberLookUp";
 
 /*Unsubscribe */
-export const UNSUBSCRIBE = "/UnSubscribeConsent"
+export const UNSUBSCRIBE = "/UnSubscribeConsent";
+
+/* TPIN APIs */
+export const CHECK_TPIN_STATUS = "/CheckTPINStatus";
+export const CREATE_TPIN = "/CreateTPIN";
+export const VERIFY_TPIN = "/VerifyTPIN";
+export const RESET_TPIN = "/ResetTPIN";
+export const CHANGE_TPIN = "/ChangeTPIN";

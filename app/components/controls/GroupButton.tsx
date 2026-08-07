@@ -38,6 +38,8 @@ const GroupButton = ({ buttons, width, onPress }: Props) => {
       case 'money transfer': return { as: 'materialcommunityicons', name: 'bank-transfer' };
       case 'airtopup':
       case 'airtime topup': return { as: 'materialcommunityicons', name: 'cellphone-wireless' };
+      case 'wallet_transfer':
+      case 'wallet transfer': return { as: 'materialcommunityicons', name: 'wallet-outline' };
       default: return null;
     }
   };

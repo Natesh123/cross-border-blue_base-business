@@ -1,233 +1,231 @@
 import React from "react";
-import { View, Text, StyleSheet, Platform, Image } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import CountryFlag from "react-native-country-flag";
-import { FONTS, SIZES } from "app/constants/Assets";
-import { dateFormat } from "app/helpers";
-import { LinearGradient } from "expo-linear-gradient";
-import Animated, { FadeInRight } from "react-native-reanimated";
+import { FONTS } from "app/constants/Assets";
 import Vector from "app/assets/vectors";
+import moment from "moment";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface IProps {
   item: any;
   index: number;
-  isLast?: boolean;
   currency?: string;
+  variant?: string;
 }
 
-const TransactionItem = ({ item, index, isLast, currency: sysCurrency }: IProps) => {
+const TransactionItem = ({ item, index, currency: sysCurrency }: IProps) => {
   const getCountryISO2 = require("country-iso-3-to-2");
   const isoCode = getCountryISO2(item.DestinationCountry) || "";
 
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case "Success":
-        return { color: "#10b981", bg: "#f0fdf4", gradient: ['#10b98120', '#10b98110'] };
-      case "Processing":
-        return { color: "#f59e0b", bg: "#fffbeb", gradient: ['#f59e0b20', '#f59e0b10'] };
-      default:
-        return { color: "#ef4444", bg: "#fef2f2", gradient: ['#ef444420', '#ef444410'] };
-    }
-  };
+  const isWalletTxn = 
+    item.TransactionType === "WALLET" ||
+    item.TransactionMode === "E-Wallet Debit" ||
+    (item.TransID && String(item.TransID).startsWith("EE")) ||
+    (item.TransactionID && String(item.TransactionID).startsWith("EE"));
 
-  const { color: statusColor, bg: statusBg, gradient: statusGradient } = getStatusConfig(item.TranStatus);
-  const isSuccess = item.TranStatus === "Success";
-
-  // Display name priority: Receiver Name > Transaction Purpose > Default
   const displayName = (item.ReceiverFirstName || item.ReceiverLastName)
     ? `${item.ReceiverFirstName} ${item.ReceiverLastName}`.trim()
-    : item.TransactionPurpose || "Money Transfer";
+    : item.TransactionPurpose || (isWalletTxn ? "Wallet Transfer" : "Money Transfer");
 
   const displayCurrency = item.Currency || sysCurrency || "£";
 
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'success': 
+      case 'ew_ew_success': return '#059669';
+      case 'pending':
+      case 'processing': return '#d97706';
+      case 'failed':
+      case 'rejected': return '#dc2626';
+      default: return '#64748b';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    if (status === 'EW_EW_SUCCESS') return 'Success';
+    return status || 'Failed';
+  };
+
+  const statusColor = getStatusColor(item.TranStatus);
+  const statusText = getStatusText(item.TranStatus);
+
+  const getLondonOffset = (date: Date): number => {
+    try {
+      const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/London',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: false
+      });
+      const parts = dtf.formatToParts(date);
+      const getVal = (type: string) => {
+        const part = parts.find(p => p.type === type);
+        return part ? parseInt(part.value, 10) : 0;
+      };
+      const year = getVal('year');
+      const month = getVal('month') - 1;
+      const day = getVal('day');
+      let hour = getVal('hour');
+      if (hour === 24) hour = 0;
+      const minute = getVal('minute');
+      const second = getVal('second');
+      const londonUTCDate = Date.UTC(year, month, day, hour, minute, second);
+      const inputUTCDate = Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        date.getUTCHours(),
+        date.getUTCMinutes(),
+        date.getUTCSeconds()
+      );
+      return (londonUTCDate - inputUTCDate) / 60000;
+    } catch (e) {
+      return 0; // Fallback if Intl is not supported
+    }
+  };
+
+  const parseDate = (d: string) => {
+    if (!d) return moment(0);
+    const formats = [
+      "YYYY-MM-DDTHH:mm:ss[Z]",
+      "YYYY-MM-DDTHH:mm:ss.SSS[Z]",
+      "YYYY-MM-DD HH:mm:ss",
+      "M/D/YYYY h:mm:ss A",
+      "MM/DD/YYYY hh:mm:ss A",
+      "DD/MM/YYYY hh:mm:ss A",
+      "DD/MM/YYYY HH:mm:ss",
+      "DD-MM-YYYY hh:mm:ss A",
+      "DD-MM-YYYY HH:mm:ss",
+      "YYYY-MM-DD hh:mm:ss A",
+      "YYYY/MM/DD hh:mm:ss A",
+      "DD-MM-YYYY",
+      "DD/MM/YYYY",
+      "DD-MMM-YYYY",
+      "DD MMM, YYYY",
+      "YYYY/MM/DD",
+      "DD MMM YYYY hh:mm:ss A",
+      "DD MMM YYYY"
+    ];
+
+    if (!isWalletTxn) {
+      // Standard transfer date is in UK local time (Europe/London)
+      let m = moment.utc(d, formats);
+      if (m.isValid()) {
+        const utcDate = new Date(m.format("YYYY-MM-DDTHH:mm:ss[Z]"));
+        const offset = getLondonOffset(utcDate);
+        m.subtract(offset, "minutes");
+        return m.local();
+      }
+    }
+
+    // Wallet transfers parsed directly as UTC
+    let m = moment.utc(d, formats, true);
+    if (m.isValid()) return m.local();
+    
+    return moment(new Date(d));
+  };
+
+  const formattedDate = parseDate(item.TransactionDate).format("DD MMM, YYYY hh:mm A");
+
   return (
-    <Animated.View
-      entering={FadeInRight.delay(index * 100).duration(800)}
-      style={[
-        localStyles.itemContainer,
-        !isLast && localStyles.separator
-      ]}
-    >
-      <View style={localStyles.mainContainer}>
-        {/* Left Section: Circular Flag Icon with Status Dot */}
-        <View style={localStyles.iconSection}>
+    <TouchableOpacity activeOpacity={0.7} style={styles.card}>
+      {/* Left Icon */}
+      <View style={styles.iconWrapper}>
+        {isWalletTxn ? (
           <LinearGradient
-            colors={statusGradient}
-            style={localStyles.iconBase}
+            colors={['#4a889f', '#1b3139']}
+            style={styles.iconCircle}
           >
-            <View style={localStyles.flagInner}>
-              {item.CountryFlag ? (
-                <Image source={{ uri: item.CountryFlag }} style={localStyles.flagImg} />
-              ) : isoCode ? (
-                <CountryFlag isoCode={isoCode} size={24} style={localStyles.flagImg} />
-              ) : (
-                <Vector as="ionicons" name="swap-horizontal" size={20} color={statusColor} />
-              )}
-            </View>
+            <Vector as="materialcommunityicons" name="wallet" size={16} color="#FFF" />
           </LinearGradient>
-          <View style={[localStyles.statusDot, { backgroundColor: statusColor }]} />
-        </View>
-
-        {/* Middle Section: Transaction Details */}
-        <View style={localStyles.detailsSection}>
-          <Text style={localStyles.receiverName} numberOfLines={1}>
-            {displayName}
-          </Text>
-          <Text style={localStyles.transIdLabel}>#{item.TransID}</Text>
-
-          <View style={localStyles.metaRow}>
-            <Text style={localStyles.typeLabel}>{item.TransactionMode}</Text>
-            <View style={localStyles.dotSeparator} />
-            <Text style={localStyles.dateLabel}>{dateFormat(item.TransactionDate)}</Text>
+        ) : isoCode ? (
+          <View style={styles.flagWrapper}>
+            <CountryFlag isoCode={isoCode} size={24} />
           </View>
-        </View>
-
-        {/* Right Section: Amount & Status Badge */}
-        <View style={localStyles.amountSection}>
-          <View style={localStyles.amountRow}>
-            <Text style={[localStyles.currencySymbol, { color: statusColor }]}>{displayCurrency}</Text>
-            <Text style={localStyles.amountVal}>{item.Amount}</Text>
+        ) : (
+          <View style={[styles.iconCircle, { backgroundColor: '#0f172a' }]}>
+            <Vector as="materialcommunityicons" name="bank-transfer" size={20} color="#FFF" />
           </View>
-
-          <View style={[localStyles.statusBadge, { backgroundColor: statusBg }]}>
-            <Text style={[localStyles.statusText, { color: statusColor }]}>
-              {item.TranStatus}
-            </Text>
-          </View>
-        </View>
-
-        <View style={localStyles.chevronBox}>
-          <Vector as="feather" name="chevron-right" size={16} color="#cbd5e1" />
-        </View>
+        )}
       </View>
-    </Animated.View>
+
+      {/* Middle Content */}
+      <View style={styles.contentCol}>
+        <Text style={styles.nameTxt} numberOfLines={1}>{displayName}</Text>
+        <Text style={styles.metaTxt}>
+          {item.TransID || item.TransactionID} • {formattedDate} • {item.Amount}
+        </Text>
+      </View>
+
+      {/* Right Status */}
+      <View style={[styles.statusPill, { backgroundColor: statusColor }]}>
+        <Text style={styles.statusTxt}>{statusText}</Text>
+      </View>
+    </TouchableOpacity>
   );
 };
 
-const localStyles = StyleSheet.create({
-  itemContainer: {
-    backgroundColor: '#ffffff',
-  },
-  separator: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  mainContainer: {
+export default TransactionItem;
+
+const styles = StyleSheet.create({
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#2dd4bf', // matching the teal/green border from screenshot
+    borderRadius: 24, // highly rounded corners like screenshot
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  iconSection: {
-    position: 'relative',
+  iconWrapper: {
     marginRight: 12,
   },
-  iconBase: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  flagInner: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
+  flagWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3 },
-      android: { elevation: 1 },
-    }),
+    backgroundColor: '#f1f5f9',
   },
-  flagImg: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  statusDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-  },
-  detailsSection: {
+  contentCol: {
     flex: 1,
     justifyContent: 'center',
   },
-  receiverName: {
-    fontSize: SIZES.font,
+  nameTxt: {
     fontFamily: FONTS.bold,
+    fontSize: 14,
     color: '#1e293b',
-  },
-  transIdLabel: {
-    fontSize: SIZES.p9,
-    fontFamily: FONTS.bold,
-    color: '#0ea5e9',
     marginBottom: 4,
-    opacity: 0.8,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typeLabel: {
-    fontSize: SIZES.p10,
-    fontFamily: FONTS.medium,
-    color: '#64748b',
-    textTransform: 'uppercase',
-  },
-  dotSeparator: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#cbd5e1',
-    marginHorizontal: 6,
-  },
-  dateLabel: {
-    fontSize: SIZES.p10,
-    fontFamily: FONTS.medium,
+  metaTxt: {
+    fontFamily: FONTS.regular,
+    fontSize: 11,
     color: '#94a3b8',
   },
-  amountSection: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginRight: 6,
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginLeft: 10,
   },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginBottom: 2,
-  },
-  currencySymbol: {
-    fontSize: SIZES.p11,
-    fontFamily: FONTS.bold,
-    marginTop: 2,
-  },
-  amountVal: {
-    fontSize: SIZES.medium,
-    fontFamily: FONTS.bold,
-    color: '#1e293b',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: SIZES.p9,
-    fontFamily: FONTS.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  chevronBox: {
-    justifyContent: 'center',
+  statusTxt: {
+    fontFamily: FONTS.semibold,
+    fontSize: 12,
+    color: '#FFF',
   }
 });
-
-export default TransactionItem;

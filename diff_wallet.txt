@@ -1,0 +1,2859 @@
+--- ../cross-border-peach-business/app/screens/myWalletTransfer/MyWalletTransfer.tsx	2026-07-29 14:42:51
++++ ./app/screens/myWalletTransfer/MyWalletTransfer.tsx	2026-08-05 13:34:31
+@@ -10,2256 +10,606 @@
+   StyleSheet,
+   ActivityIndicator,
+   Platform,
+-  Modal,
+-} from "react-native";
+-import { RFValue } from "react-native-responsive-fontsize";
+-import { useRecoilValue } from "recoil";
+-import { useIsFocused, useNavigation } from "@react-navigation/native";
+-import AsyncStorage from "@react-native-async-storage/async-storage";
+-
+-import { ProfileState } from "../../atoms";
+-import { GetWalletBalance, WalletTransfer, GenerateOTP, ValidateOTP, CheckTPINStatus, CreateTPIN, VerifyTPIN, ResetTPIN, ChangeTPIN } from "app/http-services";
+-import { FONTS, SIZES } from "../../constants/Assets";
+-
+-import Container from "app/theme/Container";
+-import Vector from "app/assets/vectors";
+-import ToastConfig from "app/components/ToastConfig";
+-import { LinearGradient } from "expo-linear-gradient";
+-import Animated, {
+-  FadeInDown,
+-  FadeInUp,
+-  FadeInLeft,
+-  useSharedValue,
+-  useAnimatedStyle,
+-  withRepeat,
+-  withTiming,
+-  interpolate,
+-  withSpring,
+-  Easing
+-} from "react-native-reanimated";
+-
+-const MyWalletTransfer = () => {
+-  const { width } = useWindowDimensions();
+-  const navigation = useNavigation();
+-  const currentToken = useRecoilValue(ProfileState);
+-
+-  const isFocused = useIsFocused();
+-
+-  const [currency, setCurrency] = useState("£");
+-  const [accountBalance, setAccountBalance] = useState("0.00");
+-  const [withdrawAccountBalance, setWithdrawAccountBalance] = useState("");
+-
+-  const [receiverId, setReceiverId] = useState("");
+-  const [receiverName, setReceiverName] = useState("");
+-  const [amount, setAmount] = useState("");
+-  const [email, setEmail] = useState("");
+-  const [otp, setOtp] = useState("");
+-
+-  const [showTransferForm, setShowTransferForm] = useState(false);
+-  const [loading, setLoading] = useState(false);
+-  const [submitting, setSubmitting] = useState(false);
+-
+-  const [showToast, setShowToast] = useState(false);
+-  const [toastMsg, setToastMsg] = useState("");
+-
+-  // TPIN state variables
+-  const [openVerifyTpin, setOpenVerifyTpin] = useState(false);
+-  const [openSetTpin, setOpenSetTpin] = useState(false);
+-  const [tpinValues, setTpinValues] = useState<any>(null);
+-  const [hasTpinApiState, setHasTpinApiState] = useState<boolean>(false);
+-  const [checkTpinLoading, setCheckTpinLoading] = useState(false);
+-
+-  // TPIN Setup Form states
+-  const [setupPin, setSetupPin] = useState("");
+-  const [setupConfirmPin, setSetupConfirmPin] = useState("");
+-  const [setupLoading, setSetupLoading] = useState(false);
+-  const [showSetupPin, setShowSetupPin] = useState(false);
+-  const [showConfirmPin, setShowConfirmPin] = useState(false);
+-
+-  // TPIN OTP states
+-  const [currentUser, setCurrentUser] = useState<any>(null);
+-  const [otpChannel, setOtpChannel] = useState<string>("MOBILE");
+-  const [otpValue, setOtpValue] = useState("");
+-  const [isOtpSent, setIsOtpSent] = useState(false);
+-  const [otpTimer, setOtpTimer] = useState(0);
+-  const [isOtpVerified, setIsOtpVerified] = useState(false);
+-  const [verifyOtpLoading, setVerifyOtpLoading] = useState(false);
+-
+-  // TPIN Verification Form states
+-  const [enteredPin, setEnteredPin] = useState("");
+-  const [showEnteredPin, setShowEnteredPin] = useState(false);
+-  const [verifyLoading, setVerifyLoading] = useState(false);
+-
+-  // TPIN Reset Form states
+-  const [openResetTpin, setOpenResetTpin] = useState(false);
+-  const [resetPin, setResetPin] = useState("");
+-  const [resetConfirmPin, setResetConfirmPin] = useState("");
+-  const [showResetPin, setShowResetPin] = useState(false);
+-  const [showResetConfirmPin, setShowResetConfirmPin] = useState(false);
+-  const [resetLoading, setResetLoading] = useState(false);
+-
+-  // TPIN Change Form states
+-  const [openChangeTpin, setOpenChangeTpin] = useState(false);
+-  const [oldTpin, setOldTpin] = useState("");
+-  const [newTpin, setNewTpin] = useState("");
+-  const [confirmNewTpin, setConfirmNewTpin] = useState("");
+-  const [showOldTpin, setShowOldTpin] = useState(false);
+-  const [showNewTpin, setShowNewTpin] = useState(false);
+-  const [showConfirmNewTpin, setShowConfirmNewTpin] = useState(false);
+-  const [changeLoading, setChangeLoading] = useState(false);
+-
+-  // Animations
+-  const shimmer = useSharedValue(0);
+-  const orb1Pos = useSharedValue(0);
+-  const orb2Pos = useSharedValue(0);
+-  const buttonGlow = useSharedValue(0.8);
+-
+-  useEffect(() => {
+-    shimmer.value = withRepeat(withTiming(1, { duration: 3500, easing: Easing.linear }), -1, false);
+-    orb1Pos.value = withRepeat(withTiming(1, { duration: 8000, easing: Easing.inOut(Easing.ease) }), -1, true);
+-    orb2Pos.value = withRepeat(withTiming(1, { duration: 10000, easing: Easing.inOut(Easing.ease) }), -1, true);
+-    buttonGlow.value = withRepeat(withTiming(1.2, { duration: 2000, easing: Easing.inOut(Easing.ease) }), -1, true);
+-  }, []);
+-
+-  const animatedShine = useAnimatedStyle(() => ({
+-    transform: [{ translateX: interpolate(shimmer.value, [0, 1], [-width, width * 1.5]) }],
+-  }));
+-
+-  const orb1Style = useAnimatedStyle(() => ({
+-    transform: [
+-      { translateX: interpolate(orb1Pos.value, [0, 1], [-20, 50]) },
+-      { translateY: interpolate(orb1Pos.value, [0, 1], [-20, 30]) },
+-      { scale: interpolate(orb1Pos.value, [0, 1], [1, 1.1]) },
+-    ],
+-  }));
+-
+-  const orb2Style = useAnimatedStyle(() => ({
+-    transform: [
+-      { translateX: interpolate(orb2Pos.value, [0, 1], [40, -40]) },
+-      { translateY: interpolate(orb2Pos.value, [0, 1], [30, -30]) },
+-      { scale: interpolate(orb2Pos.value, [0, 1], [1.1, 0.9]) },
+-    ],
+-  }));
+-
+-  const glowStyle = useAnimatedStyle(() => ({
+-    transform: [{ scale: buttonGlow.value }],
+-    opacity: interpolate(buttonGlow.value, [0.8, 1.2], [0.5, 0]),
+-  }));
+-
+-  useEffect(() => {
+-    const _currency = process.env.CURRENCY_SYMBOL || "£";
+-    setCurrency(_currency);
+-    fetchWalletBalance(currentToken.tokenId, currentToken.remitterId);
+-  }, [isFocused]);
+-
+-  const fetchWalletBalance = async (tokenId: string, remitterId: string) => {
+-    try {
+-      setLoading(true);
+-      const res = await GetWalletBalance(tokenId);
+-      if (res?.status === 200) {
+-        setAccountBalance(res?.data?.BalanceAmount || "0.00");
+-        setWithdrawAccountBalance(res?.data?.WD_BalanceAmount || "0.00");
+-      }
+-    } catch (error) {
+-      console.error("Error fetching wallet balance:", error);
+-    } finally {
+-      setLoading(false);
+-    }
+-  };
+-
+-  useEffect(() => {
+-    const fetchUser = async () => {
+-      try {
+-        const userStr = await AsyncStorage.getItem("user");
+-        if (userStr) {
+-          setCurrentUser(JSON.parse(userStr));
+-        }
+-      } catch (error) {
+-        console.error("Error fetching user data from storage", error);
+-      }
+-    };
+-    fetchUser();
+-  }, [isFocused]);
+-
+-  useEffect(() => {
+-    let interval: NodeJS.Timeout;
+-    if (otpTimer > 0) {
+-      interval = setInterval(() => {
+-        setOtpTimer((prev) => prev - 1);
+-      }, 1000);
+-    }
+-    return () => clearInterval(interval);
+-  }, [otpTimer]);
+-
+-  const maskEmail = (emailStr: string) => {
+-    if (!emailStr) return "";
+-    const [name, domain] = emailStr.split("@");
+-    if (name.length <= 3) return `***@${domain}`;
+-    return `${name.substring(0, 3)}***@${domain}`;
+-  };
+-
+-  const maskMobile = (mobileStr: string) => {
+-    if (!mobileStr) return "";
+-    const clean = mobileStr.replace(/[^0-9]/g, "");
+-    if (clean.length <= 4) return clean;
+-    return `*******${clean.substring(clean.length - 4)}`;
+-  };
+-
+-  const handleSendOtp = async () => {
+-    try {
+-      const userStr = await AsyncStorage.getItem("user");
+-      const user = userStr ? JSON.parse(userStr) : null;
+-      if (!user) {
+-        setToastMsg("User session not found.");
+-        setShowToast(true);
+-        return;
+-      }
+-
+-      setOtpTimer(60);
+-      setIsOtpVerified(false);
+-      setOtpValue("");
+-
+-      const otpReq = {
+-        Email: user.Email || user.email,
+-        MobileNumber: user.MobileNumber || user.mobileNo,
+-        OTPType: "TP",
+-      };
+-
+-      const res = await GenerateOTP(otpReq);
+-      if (res?.data?.StatusCode === "ER0000") {
+-        setIsOtpSent(true);
+-        setToastMsg(`OTP successfully sent to your ${otpChannel === "EMAIL" ? "email address" : "mobile number"}.`);
+-      } else {
+-        setOtpTimer(0);
+-        setToastMsg(res?.data?.StatusMsg || "Failed to generate OTP");
+-      }
+-    } catch (error) {
+-      console.error("Generate OTP Error: ", error);
+-      setOtpTimer(0);
+-      setToastMsg("Something went wrong. Please try again.");
+-    } finally {
+-      setShowToast(true);
+-    }
+-  };
+-
+-  const handleVerifyOtp = async () => {
+-    if (!otpValue || otpValue.length < 6) {
+-      setToastMsg("Please enter a valid 6-digit OTP");
+-      setShowToast(true);
+-      return;
+-    }
+-
+-    try {
+-      setVerifyOtpLoading(true);
+-      const userStr = await AsyncStorage.getItem("user");
+-      const user = userStr ? JSON.parse(userStr) : null;
+-      if (!user) {
+-        setToastMsg("User session not found.");
+-        setShowToast(true);
+-        setVerifyOtpLoading(false);
+-        return;
+-      }
+-
+-      const otpPayload = {
+-        email: user.Email || user.email,
+-        mobile: user.MobileNumber || user.mobileNo,
+-        type: "TP",
+-        emailOTP: otpChannel === "EMAIL" ? otpValue : "",
+-        mobileOTP: otpChannel === "MOBILE" ? otpValue : ""
+-      };
+-
+-      const otpRes = await ValidateOTP(otpPayload);
+-      if (otpRes?.data?.StatusCode === "ER0000") {
+-        setIsOtpVerified(true);
+-        setToastMsg("OTP verified successfully");
+-        setShowToast(true);
+-      } else {
+-        setToastMsg(otpRes?.data?.StatusMsg || "OTP verification failed");
+-        setShowToast(true);
+-      }
+-    } catch (error) {
+-      console.error("Verify OTP Error: ", error);
+-      setToastMsg("Something went wrong. Please try again.");
+-      setShowToast(true);
+-    } finally {
+-      setVerifyOtpLoading(false);
+-    }
+-  };
+-
+-  const handleSetTpinSubmit = async () => {
+-    if (!isOtpVerified) {
+-      setToastMsg("Please verify OTP first");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (setupPin.length !== 4 || setupConfirmPin.length !== 4) {
+-      setToastMsg("TPIN must be exactly 4 digits");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (setupPin !== setupConfirmPin) {
+-      setToastMsg("TPIN and Confirm TPIN do not match");
+-      setShowToast(true);
+-      return;
+-    }
+-
+-    try {
+-      setSetupLoading(true);
+-      const userStr = await AsyncStorage.getItem("user");
+-      const user = userStr ? JSON.parse(userStr) : null;
+-      if (!user) {
+-        setToastMsg("User session not found.");
+-        setShowToast(true);
+-        setSetupLoading(false);
+-        return;
+-      }
+-
+-      const mpinRes = await CreateTPIN({ TPIN: setupPin });
+-      if (mpinRes?.data?.StatusCode === "ER0000" || mpinRes?.data?.StatusCode === "0") {
+-        user.isMPinGenerated = "Y";
+-        await AsyncStorage.setItem("user", JSON.stringify(user));
+-
+-        setSetupLoading(false);
+-        setOpenSetTpin(false);
+-        setSetupPin("");
+-        setSetupConfirmPin("");
+-        setOtpValue("");
+-        setIsOtpSent(false);
+-        setOtpTimer(0);
+-        setIsOtpVerified(false);
+-        setShowSetupPin(false);
+-        setShowConfirmPin(false);
+-        setHasTpinApiState(true);
+-        setToastMsg("TPIN created successfully");
+-        setShowToast(true);
+-
+-        setOpenVerifyTpin(true);
+-      } else {
+-        setSetupLoading(false);
+-        setToastMsg(mpinRes?.data?.StatusMsg || "Failed to set TPIN");
+-        setShowToast(true);
+-      }
+-    } catch (error) {
+-      console.error("Set TPIN Error: ", error);
+-      setSetupLoading(false);
+-      setToastMsg("Something went wrong. Please try again.");
+-      setShowToast(true);
+-    }
+-  };
+-
+-  const handleVerifyTpinSubmit = async () => {
+-    if (enteredPin.length !== 4) {
+-      setToastMsg("Please enter a 4-digit TPIN");
+-      setShowToast(true);
+-      return;
+-    }
+-
+-    try {
+-      setVerifyLoading(true);
+-
+-      // Verify TPIN first
+-      const verifyRes = await VerifyTPIN({ TPIN: enteredPin });
+-      if (verifyRes?.data?.StatusCode === "ER0000" || verifyRes?.data?.StatusCode === "0") {
+-        const reqBody = {
+-          ToRemitterID: tpinValues.ToRemitterID,
+-          Amount: tpinValues.Amount,
+-          RemitterEmail: tpinValues.RemitterEmail,
+-          TPIN: enteredPin,
+-        };
+-
+-        const res = await WalletTransfer(reqBody);
+-
+-        const statusCode = res?.data?.StatusCode;
+-        if (statusCode !== "ER0098") {
+-          setToastMsg(res?.data?.StatusMsg || "Transfer successful");
+-          fetchWalletBalance(currentToken.tokenId, currentToken.remitterId);
+-
+-          setOpenVerifyTpin(false);
+-          setEnteredPin("");
+-          setShowEnteredPin(false);
+-          setReceiverId("");
+-          setReceiverName("");
+-          setAmount("");
+-          setEmail("");
+-          setShowTransferForm(false);
+-
+-          setTimeout(() => {
+-            navigation.navigate("HomeDrawer");
+-          }, 1500);
+-        } else {
+-          setOpenVerifyTpin(false);
+-          setEnteredPin("");
+-          setShowEnteredPin(false);
+-          setToastMsg(res?.data?.StatusMsg || "TPIN Blocked. Please reset your TPIN.");
+-        }
+-      } else {
+-        if (verifyRes?.data?.StatusCode === "ER0098" || verifyRes?.data?.StatusCode === "ER0014") {
+-          setOpenVerifyTpin(false);
+-          setEnteredPin("");
+-          setShowEnteredPin(false);
+-          setToastMsg(verifyRes?.data?.StatusMsg || "TPIN Blocked. Please reset your TPIN.");
+-        } else {
+-          setToastMsg(verifyRes?.data?.StatusMsg || "Invalid TPIN. Please try again.");
+-        }
+-      }
+-    } catch (error) {
+-      console.error("Wallet Transfer Error: ", error);
+-      setToastMsg("Something went wrong. Please try again.");
+-    } finally {
+-      setShowToast(true);
+-      setVerifyLoading(false);
+-    }
+-  };
+-
+-  const handleResetTpinSubmit = async () => {
+-    if (!isOtpVerified) {
+-      setToastMsg("Please verify OTP first");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (resetPin.length !== 4 || resetConfirmPin.length !== 4) {
+-      setToastMsg("TPIN must be exactly 4 digits");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (resetPin !== resetConfirmPin) {
+-      setToastMsg("TPIN and Confirm TPIN do not match");
+-      setShowToast(true);
+-      return;
+-    }
+-
+-    try {
+-      setResetLoading(true);
+-      const res = await ResetTPIN({ TPIN: resetPin });
+-      if (res?.data?.StatusCode === "ER0000" || res?.data?.StatusCode === "0") {
+-        setResetLoading(false);
+-        setOpenResetTpin(false);
+-        setResetPin("");
+-        setResetConfirmPin("");
+-        setOtpValue("");
+-        setIsOtpSent(false);
+-        setOtpTimer(0);
+-        setIsOtpVerified(false);
+-        setShowResetPin(false);
+-        setShowResetConfirmPin(false);
+-        setToastMsg("TPIN reset successfully");
+-        setShowToast(true);
+-        setOpenVerifyTpin(true);
+-      } else {
+-        setResetLoading(false);
+-        setToastMsg(res?.data?.StatusMsg || "Failed to reset TPIN");
+-        setShowToast(true);
+-      }
+-    } catch (error) {
+-      console.error("Reset TPIN Error: ", error);
+-      setResetLoading(false);
+-      setToastMsg("Something went wrong. Please try again.");
+-      setShowToast(true);
+-    }
+-  };
+-
+-  const handleChangeTpinSubmit = async () => {
+-    if (oldTpin.length !== 4) {
+-      setToastMsg("Old TPIN must be exactly 4 digits");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (newTpin.length !== 4 || confirmNewTpin.length !== 4) {
+-      setToastMsg("New TPIN must be exactly 4 digits");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (newTpin !== confirmNewTpin) {
+-      setToastMsg("New TPIN and Confirm TPIN do not match");
+-      setShowToast(true);
+-      return;
+-    }
+-    if (oldTpin === newTpin) {
+-      setToastMsg("New TPIN cannot be the same as Old TPIN");
+-      setShowToast(true);
+-      return;
+-    }
+-
+-    try {
+-      setChangeLoading(true);
+-      const res = await ChangeTPIN({ OldTPIN: oldTpin, TPIN: newTpin });
+-      if (res?.data?.StatusCode === "ER0000" || res?.data?.StatusCode === "0") {
+-        setChangeLoading(false);
+-        setOpenChangeTpin(false);
+-        setOldTpin("");
+-        setNewTpin("");
+-        setConfirmNewTpin("");
+-        setShowOldTpin(false);
+-        setShowNewTpin(false);
+-        setShowConfirmNewTpin(false);
+-        setToastMsg("TPIN changed successfully");
+-        setShowToast(true);
+-        setOpenVerifyTpin(true);
+-      } else {
+-        setChangeLoading(false);
+-        setToastMsg(res?.data?.StatusMsg || "Failed to change TPIN");
+-        setShowToast(true);
+-      }
+-    } catch (error) {
+-      console.error("Change TPIN Error: ", error);
+-      setChangeLoading(false);
+-      setToastMsg("Something went wrong. Please try again.");
+-      setShowToast(true);
+-    }
+-  };
+-
+-  const handleConfirmTransfer = async () => {
+-    if (!receiverId || !amount || !email) {
+-      setToastMsg("Please fill all fields");
+-      setShowToast(true);
+-      return;
+-    }
+-
+-    try {
+-      setTpinValues({
+-        ToRemitterID: receiverId,
+-        Amount: amount,
+-        RemitterEmail: email,
+-      });
+-
+-      setCheckTpinLoading(true);
+-      try {
+-        const checkRes = await CheckTPINStatus({});
+-        setCheckTpinLoading(false);
+-        const hasTpin = checkRes?.data?.HasTPIN === true;
+-        setHasTpinApiState(hasTpin);
+-        
+-        if (hasTpin) {
+-          setOpenVerifyTpin(true);
+-        } else {
+-          setOpenSetTpin(true);
+-        }
+-      } catch (err) {
+-        setCheckTpinLoading(false);
+-        // Fallback to local storage
+-        const userStr = await AsyncStorage.getItem("user");
+-        const user = userStr ? JSON.parse(userStr) : null;
+-        const hasPin = user?.isMPinGenerated === "Y" || user?.IsmPINgenerated === "Y";
+-        setHasTpinApiState(hasPin);
+-
+-        if (hasPin) {
+-          setOpenVerifyTpin(true);
+-        } else {
+-          setOpenSetTpin(true);
+-        }
+-      }
+-    } catch (error) {
+-      console.error("Error reading user data", error);
+-      setToastMsg("Error checking TPIN status");
+-      setShowToast(true);
+-    }
+-  };
+-
+-  const [integerPart, decimalPart = "00"] = accountBalance.toString().split(".");
+-
+-  return (
+-    <SafeAreaView style={localStyles.container}>
+-      {/* Immersive Animated Background */}
+-      <View style={localStyles.topBackground}>
+-        <Animated.View style={[localStyles.shape1, orb1Style]} />
+-        <Animated.View style={[localStyles.shape2, orb2Style]} />
+-        <View style={localStyles.glassOverlay} />
+-      </View>
+-
+-      <View style={localStyles.header}>
+-        <TouchableOpacity
+-          style={localStyles.backButton}
+-          onPress={() => navigation.goBack()}
+-        >
+-          <Vector as="feather" name="chevron-left" size={24} color="#3B2F2F" />
+-        </TouchableOpacity>
+-        <Text style={localStyles.headerTitle}>Wallet Transfer</Text>
+-        <View style={{ width: 44 }} />
+-      </View>
+-
+-      <Container>
+-        <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
+-          
+-          {/* Ultra-Luxury Balance Card */}
+-          <Animated.View entering={FadeInDown.delay(100).duration(800)} style={localStyles.cardShadowWrapper}>
+-            <LinearGradient
+-              colors={['#1F1A1A', '#2D2424', '#4A3B3B']}
+-              start={{ x: 0, y: 0 }}
+-              end={{ x: 1, y: 1 }}
+-              style={localStyles.eliteCard}
+-            >
+-              {/* Inner glow / ambient light */}
+-              <View style={localStyles.ambientCardLight} />
+-
+-              <View style={localStyles.balanceTopRow}>
+-                <View style={localStyles.chipIconBox}>
+-                  <Vector as="materialcommunityicons" name="integrated-circuit-chip" size={28} color="rgba(255,255,255,0.7)" />
+-                </View>
+-                <View style={localStyles.eliteBadgePill}>
+-                  <Vector as="materialicons" name="wifi-tethering" size={14} color="#FF8E72" />
+-                  <Text style={localStyles.eliteBadgeTxt}>ELITE ACCOUNT</Text>
+-                </View>
+-              </View>
+-              
+-              <Text style={localStyles.balanceLabel}>AVAILABLE FUNDS</Text>
+-              <View style={localStyles.amountContainer}>
+-                <Text style={localStyles.currencySymbol}>{currency}</Text>
+-                <Text style={localStyles.mainAmount}>{integerPart || "0"}</Text>
+-                <Text style={localStyles.decimalAmount}>.{decimalPart}</Text>
+-              </View>
+-              
+-              <View style={localStyles.balanceFooter}>
+-                <View style={localStyles.footerCol}>
+-                  <Text style={localStyles.userLabel}>CARDHOLDER</Text>
+-                  <Text style={localStyles.userName}>{currentToken.firstName || "User"}</Text>
+-                </View>
+-                <Vector as="feather" name="pocket" size={24} color="rgba(255,255,255,0.2)" />
+-              </View>
+-
+-              {/* Sweep Shimmer Effect */}
+-              <Animated.View style={[localStyles.sweepEffect, animatedShine]} />
+-            </LinearGradient>
+-          </Animated.View>
+-
+-          {!showTransferForm ? (
+-            <Animated.View entering={FadeInUp.delay(300).duration(800)} style={localStyles.infoCard}>
+-              <View style={localStyles.iconGlowWrapper}>
+-                <View style={localStyles.iconCircle}>
+-                  <Vector as="feather" name="send" size={32} color="#FFF" />
+-                </View>
+-              </View>
+-              
+-              <Text style={localStyles.infoTitle}>Instant Transfer</Text>
+-              <Text style={localStyles.infoDesc}>
+-                Experience a seamless flow. Send money securely across borders in real-time.
+-              </Text>
+-
+-              <View style={localStyles.timelineWrapper}>
+-                {[
+-                  { icon: "user", title: "Remitter ID", desc: "Target receiver's unique ID" },
+-                  { icon: "dollar-sign", title: "Amount", desc: "Value you wish to send" },
+-                  { icon: "shield", title: "Verification", desc: "Confirm with registered email" }
+-                ].map((step, index) => (
+-                  <View key={index} style={localStyles.timelineNode}>
+-                    <View style={localStyles.nodeIconCol}>
+-                      <View style={localStyles.nodeIconBox}>
+-                        <Vector as="feather" name={step.icon} size={16} color="#FF8E72" />
+-                      </View>
+-                      {index < 2 && <View style={localStyles.nodeConnector} />}
+-                    </View>
+-                    <View style={localStyles.nodeContent}>
+-                      <Text style={localStyles.nodeTitle}>{step.title}</Text>
+-                      <Text style={localStyles.nodeDesc}>{step.desc}</Text>
+-                    </View>
+-                  </View>
+-                ))}
+-              </View>
+-
+-              <View style={localStyles.startBtnWrapper}>
+-                <Animated.View style={[localStyles.startBtnGlow, glowStyle]} />
+-                <TouchableOpacity
+-                  style={localStyles.startBtn}
+-                  activeOpacity={0.9}
+-                  onPress={() => setShowTransferForm(true)}
+-                >
+-                  <LinearGradient
+-                    colors={['#FF8E72', '#FF5A36']}
+-                    start={{ x: 0, y: 0 }}
+-                    end={{ x: 1, y: 1 }}
+-                    style={localStyles.startBtnGradient}
+-                  >
+-                    <Text style={localStyles.startBtnText}>Start New Transfer</Text>
+-                    <Vector as="feather" name="arrow-right" size={20} color="#fff" />
+-                  </LinearGradient>
+-                </TouchableOpacity>
+-              </View>
+-            </Animated.View>
+-          ) : (
+-            <Animated.View entering={FadeInUp.delay(200).duration(600)} style={localStyles.formContainer}>
+-              <View style={localStyles.formHeader}>
+-                <Text style={localStyles.formTitle}>Transfer Details</Text>
+-                <TouchableOpacity onPress={() => setShowTransferForm(false)} style={localStyles.cancelBtn}>
+-                  <Vector as="feather" name="x" size={16} color="#3B2F2F" />
+-                </TouchableOpacity>
+-              </View>
+-
+-              {/* Amount Hero Section */}
+-              <View style={localStyles.amountHeroSection}>
+-                <LinearGradient
+-                  colors={['rgba(255, 142, 114, 0.08)', 'rgba(255, 255, 255, 0.5)']}
+-                  style={localStyles.amountHeroBackground}
+-                />
+-                <Text style={localStyles.amountHeroLabel}>ENTER AMOUNT</Text>
+-                <View style={localStyles.amountInputWrapper}>
+-                  <Text style={localStyles.amountHeroCurrency}>{currency}</Text>
+-                  <TextInput
+-                    style={localStyles.amountHeroInput}
+-                    placeholder="0.00"
+-                    placeholderTextColor="#cbd5e1"
+-                    keyboardType="numeric"
+-                    value={amount}
+-                    onChangeText={(val) => {
+-                      const onlyNums = val.replace(/[^0-9.]/g, "");
+-                      setAmount(onlyNums);
+-                    }}
+-                  />
+-                </View>
+-                <View style={localStyles.amountGlowLine} />
+-              </View>
+-
+-              <View style={localStyles.inputGroup}>
+-                <Text style={localStyles.inputLabel}>RECEIVER ID</Text>
+-                <View style={[localStyles.inputWrapper, receiverId ? localStyles.inputWrapperActive : null]}>
+-                  <View style={localStyles.inputIconCont}>
+-                    <Vector as="feather" name="user" size={18} color={receiverId ? "#FF8E72" : "#94a3b8"} />
+-                  </View>
+-                  <TextInput
+-                    style={localStyles.textInput}
+-                    placeholder="e.g. KM00000001"
+-                    placeholderTextColor="#94a3b8"
+-                    value={receiverId}
+-                    onChangeText={(val) => setReceiverId(val.replace(/[^a-zA-Z0-9]/g, ""))}
+-                  />
+-                </View>
+-                {receiverId ? (
+-                  <Animated.View entering={FadeInLeft} style={localStyles.verifiedRow}>
+-                    <Vector as="feather" name="check-circle" size={14} color="#10b981" />
+-                    <Text style={localStyles.receiverHint}>Ready to verify</Text>
+-                  </Animated.View>
+-                ) : null}
+-              </View>
+-
+-              <View style={localStyles.inputGroup}>
+-                <Text style={localStyles.inputLabel}>VERIFICATION EMAIL</Text>
+-                <View style={[localStyles.inputWrapper, email ? localStyles.inputWrapperActive : null]}>
+-                  <View style={localStyles.inputIconCont}>
+-                    <Vector as="feather" name="mail" size={18} color={email ? "#FF8E72" : "#94a3b8"} />
+-                  </View>
+-                  <TextInput
+-                    style={localStyles.textInput}
+-                    placeholder="name@email.com"
+-                    placeholderTextColor="#94a3b8"
+-                    keyboardType="email-address"
+-                    autoCapitalize="none"
+-                    value={email}
+-                    onChangeText={setEmail}
+-                  />
+-                </View>
+-              </View>
+-
+-              <View style={localStyles.warningBox}>
+-                <View style={localStyles.warningIconBox}>
+-                  <Vector as="feather" name="shield" size={14} color="#d97706" />
+-                </View>
+-                <Text style={localStyles.warningText}>End-to-end encrypted transfer. Only withdrawal-enabled balances can be sent.</Text>
+-              </View>
+-
+-              <View style={localStyles.footerActions}>
+-                <TouchableOpacity
+-                  style={[localStyles.mainActionBtn, (!receiverId || !amount || !email || submitting) && localStyles.mainActionBtnDisabled]}
+-                  disabled={!receiverId || !amount || !email || submitting}
+-                  onPress={handleConfirmTransfer}
+-                  activeOpacity={0.8}
+-                >
+-                  <LinearGradient
+-                    colors={['#FF8E72', '#FF5A36']}
+-                    start={{ x: 0, y: 0 }}
+-                    end={{ x: 1, y: 1 }}
+-                    style={localStyles.mainBtnGradient}
+-                  >
+-                    {submitting ? (
+-                      <ActivityIndicator color="#fff" />
+-                    ) : (
+-                      <View style={localStyles.btnContentRow}>
+-                        <Text style={localStyles.mainBtnText}>Confirm Transfer</Text>
+-                        <Vector as="feather" name="chevron-right" size={22} color="#fff" />
+-                      </View>
+-                    )}
+-                  </LinearGradient>
+-                </TouchableOpacity>
+-              </View>
+-
+-            </Animated.View>
+-          )}
+-
+-        </ScrollView>
+-      </Container>
+-      {/* Set TPIN Modal */}
+-      <Modal
+-        visible={openSetTpin}
+-        transparent={true}
+-        animationType="fade"
+-        onRequestClose={() => {
+-          setOpenSetTpin(false);
+-          setSetupPin("");
+-          setSetupConfirmPin("");
+-          setOtpValue("");
+-          setIsOtpSent(false);
+-          setOtpTimer(0);
+-          setIsOtpVerified(false);
+-          setShowSetupPin(false);
+-          setShowConfirmPin(false);
+-        }}
+-      >
+-        <View style={tpinModalStyles.modalContainer}>
+-          <View style={tpinModalStyles.modalContent}>
+-            <TouchableOpacity
+-              style={tpinModalStyles.closeButton}
+-              onPress={() => {
+-                setOpenSetTpin(false);
+-                setSetupPin("");
+-                setSetupConfirmPin("");
+-                setOtpValue("");
+-                setIsOtpSent(false);
+-                setOtpTimer(0);
+-                setIsOtpVerified(false);
+-                setShowSetupPin(false);
+-                setShowConfirmPin(false);
+-              }}
+-            >
+-              <Vector as="feather" name="x" size={16} color="#3B2F2F" />
+-            </TouchableOpacity>
+-
+-            <Text style={tpinModalStyles.modalTitle}>Set up Transaction PIN (TPIN)</Text>
+-            <Text style={tpinModalStyles.modalDescription}>
+-              You need to set up a 4-digit TPIN to secure your transactions.
+-            </Text>
+-
+-            <Text style={tpinModalStyles.sectionLabel}>Verify Identity Via</Text>
+-            
+-            <View style={tpinModalStyles.channelContainer}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOtpChannel("EMAIL");
+-                  setOtpValue("");
+-                  setIsOtpSent(false);
+-                  setOtpTimer(0);
+-                }}
+-                style={[
+-                  tpinModalStyles.channelCard,
+-                  otpChannel === "EMAIL" && tpinModalStyles.channelCardSelected,
+-                  { display: 'none' }
+-                ]}
+-              >
+-                <Vector
+-                  as="feather"
+-                  name="mail"
+-                  size={20}
+-                  color={otpChannel === "EMAIL" ? "#FF8E72" : "#94a3b8"}
+-                  style={{ marginBottom: 6 }}
+-                />
+-                <Text style={tpinModalStyles.channelTitle}>Email OTP</Text>
+-                <Text style={tpinModalStyles.channelValue}>
+-                  {currentUser?.Email || currentUser?.email ? maskEmail(currentUser.Email || currentUser.email) : "N/A"}
+-                </Text>
+-              </TouchableOpacity>
+-
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOtpChannel("MOBILE");
+-                  setOtpValue("");
+-                  setIsOtpSent(false);
+-                  setOtpTimer(0);
+-                }}
+-                style={[
+-                  tpinModalStyles.channelCard,
+-                  otpChannel === "MOBILE" && tpinModalStyles.channelCardSelected,
+-                ]}
+-              >
+-                <Vector
+-                  as="feather"
+-                  name="smartphone"
+-                  size={20}
+-                  color={otpChannel === "MOBILE" ? "#FF8E72" : "#94a3b8"}
+-                  style={{ marginBottom: 6 }}
+-                />
+-                <Text style={tpinModalStyles.channelTitle}>SMS OTP</Text>
+-                <Text style={tpinModalStyles.channelValue}>
+-                  {currentUser?.MobileNumber || currentUser?.mobileNo ? maskMobile(currentUser.MobileNumber || currentUser.mobileNo) : "N/A"}
+-                </Text>
+-              </TouchableOpacity>
+-            </View>
+-
+-            <TouchableOpacity
+-              onPress={handleSendOtp}
+-              disabled={otpTimer > 0}
+-              style={[
+-                tpinModalStyles.otpButton,
+-                otpTimer > 0 && { borderColor: "rgba(59, 47, 47, 0.1)" }
+-              ]}
+-            >
+-              <Text style={[tpinModalStyles.otpButtonText, otpTimer > 0 && { color: "#8E7F77" }]}>
+-                {otpTimer > 0 ? `Resend OTP in ${otpTimer}s` : isOtpSent ? "Resend OTP Code" : "Send OTP Verification"}
+-              </Text>
+-            </TouchableOpacity>
+-
+-            {isOtpSent && (
+-              <View style={tpinModalStyles.successAlert}>
+-                <Text style={tpinModalStyles.successAlertText}>
+-                  ✓ OTP successfully sent to your registered {otpChannel === "EMAIL" ? "email address" : "mobile number"}.
+-                </Text>
+-              </View>
+-            )}
+-
+-            {isOtpSent && (
+-              <View style={tpinModalStyles.inputWrapper}>
+-                <Text style={tpinModalStyles.inputLabel}>ENTER OTP CODE</Text>
+-                <View style={{ flexDirection: "row", gap: 10 }}>
+-                  <TextInput
+-                    placeholder="Enter 6-digit OTP"
+-                    placeholderTextColor="#94a3b8"
+-                    keyboardType="numeric"
+-                    maxLength={6}
+-                    editable={!isOtpVerified}
+-                    value={otpValue}
+-                    onChangeText={(val) => setOtpValue(val.replace(/[^0-9]/g, ''))}
+-                    style={[tpinModalStyles.textInput, { flex: 1 }]}
+-                  />
+-                  <TouchableOpacity
+-                    onPress={handleVerifyOtp}
+-                    disabled={otpValue.length < 6 || verifyOtpLoading || isOtpVerified}
+-                    style={[
+-                      tpinModalStyles.otpVerifyBtn,
+-                      isOtpVerified && { backgroundColor: "#10b981" },
+-                      (otpValue.length < 6 && !isOtpVerified) && { opacity: 0.5 }
+-                    ]}
+-                  >
+-                    {verifyOtpLoading ? (
+-                      <ActivityIndicator color="#fff" size="small" />
+-                    ) : (
+-                      <Text style={tpinModalStyles.otpVerifyBtnText}>
+-                        {isOtpVerified ? "Verified" : "Verify"}
+-                      </Text>
+-                    )}
+-                  </TouchableOpacity>
+-                </View>
+-              </View>
+-            )}
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>NEW 4-DIGIT TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Enter 4-digit TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showSetupPin}
+-                  value={setupPin}
+-                  onChangeText={(val) => setSetupPin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowSetupPin(!showSetupPin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showSetupPin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>CONFIRM 4-DIGIT TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Confirm 4-digit TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showConfirmPin}
+-                  value={setupConfirmPin}
+-                  onChangeText={(val) => setSetupConfirmPin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowConfirmPin(!showConfirmPin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showConfirmPin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.modalButtonRow}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOpenSetTpin(false);
+-                  setSetupPin("");
+-                  setSetupConfirmPin("");
+-                  setOtpValue("");
+-                  setIsOtpSent(false);
+-                  setOtpTimer(0);
+-                  setIsOtpVerified(false);
+-                  setShowSetupPin(false);
+-                  setShowConfirmPin(false);
+-                }}
+-                disabled={setupLoading}
+-                style={tpinModalStyles.modalCancelButton}
+-              >
+-                <Text style={tpinModalStyles.modalCancelButtonText}>Cancel</Text>
+-              </TouchableOpacity>
+-              <TouchableOpacity
+-                onPress={handleSetTpinSubmit}
+-                disabled={setupPin.length !== 4 || setupConfirmPin.length !== 4 || setupLoading}
+-                style={[
+-                  tpinModalStyles.modalConfirmButton,
+-                  (setupPin.length !== 4 || setupConfirmPin.length !== 4) && { opacity: 0.5 }
+-                ]}
+-              >
+-                {setupLoading ? (
+-                  <ActivityIndicator color="#fff" />
+-                ) : (
+-                  <Text style={tpinModalStyles.modalConfirmButtonText}>Set TPIN</Text>
+-                )}
+-              </TouchableOpacity>
+-            </View>
+-          </View>
+-        </View>
+-      </Modal>
+-
+-      {/* Verify TPIN Modal */}
+-      <Modal
+-        visible={openVerifyTpin}
+-        transparent={true}
+-        animationType="fade"
+-        onRequestClose={() => {
+-          setOpenVerifyTpin(false);
+-          setEnteredPin("");
+-          setShowEnteredPin(false);
+-        }}
+-      >
+-        <View style={tpinModalStyles.modalContainer}>
+-          <View style={tpinModalStyles.modalContent}>
+-            <TouchableOpacity
+-              style={tpinModalStyles.closeButton}
+-              onPress={() => {
+-                setOpenVerifyTpin(false);
+-                setEnteredPin("");
+-                setShowEnteredPin(false);
+-              }}
+-            >
+-              <Vector as="feather" name="x" size={16} color="#3B2F2F" />
+-            </TouchableOpacity>
+-
+-            <Text style={tpinModalStyles.modalTitle}>Enter Transaction PIN</Text>
+-
+-            {tpinValues && (
+-              <View style={tpinModalStyles.summaryCard}>
+-                <View style={tpinModalStyles.summaryRow}>
+-                  <Text style={tpinModalStyles.summaryLabel}>Transfer To:</Text>
+-                  <Text style={tpinModalStyles.summaryValue}>{tpinValues.ToRemitterID}</Text>
+-                </View>
+-                <View style={tpinModalStyles.summaryRow}>
+-                  <Text style={tpinModalStyles.summaryLabel}>Amount:</Text>
+-                  <Text style={tpinModalStyles.summaryAmount}>{currency} {tpinValues.Amount}</Text>
+-                </View>
+-              </View>
+-            )}
+-
+-            <Text style={tpinModalStyles.modalDescription}>
+-              Enter your secure 4-digit TPIN to complete this transfer.
+-            </Text>
+-
+-            <View style={{ width: "65%", alignSelf: "center", position: "relative", marginBottom: 20 }}>
+-              <TextInput
+-                placeholder="••••"
+-                placeholderTextColor="#94a3b8"
+-                keyboardType="numeric"
+-                maxLength={4}
+-                secureTextEntry={!showEnteredPin}
+-                value={enteredPin}
+-                onChangeText={(val) => setEnteredPin(val.replace(/[^0-9]/g, ''))}
+-                style={[
+-                  tpinModalStyles.pinCodeInput,
+-                  {
+-                    width: "100%",
+-                    marginBottom: 0,
+-                    paddingLeft: 20, 
+-                  }
+-                ]}
+-              />
+-              <TouchableOpacity
+-                onPress={() => setShowEnteredPin(!showEnteredPin)}
+-                style={{
+-                  position: "absolute",
+-                  right: 12,
+-                  top: 0,
+-                  bottom: 0,
+-                  justifyContent: "center",
+-                  alignItems: "center",
+-                  zIndex: 2,
+-                }}
+-              >
+-                <Vector
+-                  as="feather"
+-                  name={showEnteredPin ? "eye" : "eye-off"}
+-                  size={20}
+-                  color="#94a3b8"
+-                />
+-              </TouchableOpacity>
+-            </View>
+-
+-            <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 20, width: "100%", paddingHorizontal: 10 }}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOpenVerifyTpin(false);
+-                  setEnteredPin("");
+-                  setShowEnteredPin(false);
+-                  setOpenChangeTpin(true);
+-                }}
+-              >
+-                <Text style={{ fontSize: 13, color: "#FF8E72", fontFamily: FONTS.bold }}>Change TPIN?</Text>
+-              </TouchableOpacity>
+-            </View>
+-
+-            <View style={tpinModalStyles.modalButtonRow}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOpenVerifyTpin(false);
+-                  setEnteredPin("");
+-                  setShowEnteredPin(false);
+-                }}
+-                disabled={verifyLoading}
+-                style={tpinModalStyles.modalCancelButton}
+-              >
+-                <Text style={tpinModalStyles.modalCancelButtonText}>Cancel</Text>
+-              </TouchableOpacity>
+-              <TouchableOpacity
+-                onPress={handleVerifyTpinSubmit}
+-                disabled={enteredPin.length !== 4 || verifyLoading}
+-                style={[
+-                  tpinModalStyles.modalConfirmButton,
+-                  (enteredPin.length !== 4) && { opacity: 0.5 }
+-                ]}
+-              >
+-                {verifyLoading ? (
+-                  <ActivityIndicator color="#fff" />
+-                ) : (
+-                  <Text style={tpinModalStyles.modalConfirmButtonText}>Verify & Transfer</Text>
+-                )}
+-              </TouchableOpacity>
+-            </View>
+-          </View>
+-        </View>
+-      </Modal>
+-
+-      {/* Reset TPIN Modal */}
+-      <Modal
+-        visible={openResetTpin}
+-        transparent={true}
+-        animationType="fade"
+-        onRequestClose={() => {
+-          setOpenResetTpin(false);
+-          setResetPin("");
+-          setResetConfirmPin("");
+-          setOtpValue("");
+-          setIsOtpSent(false);
+-          setOtpTimer(0);
+-          setIsOtpVerified(false);
+-          setShowResetPin(false);
+-          setShowResetConfirmPin(false);
+-        }}
+-      >
+-        <View style={tpinModalStyles.modalContainer}>
+-          <View style={tpinModalStyles.modalContent}>
+-            <TouchableOpacity
+-              style={tpinModalStyles.closeButton}
+-              onPress={() => {
+-                setOpenResetTpin(false);
+-                setResetPin("");
+-                setResetConfirmPin("");
+-                setOtpValue("");
+-                setIsOtpSent(false);
+-                setOtpTimer(0);
+-                setIsOtpVerified(false);
+-                setShowResetPin(false);
+-                setShowResetConfirmPin(false);
+-              }}
+-            >
+-              <Vector as="feather" name="x" size={16} color="#3B2F2F" />
+-            </TouchableOpacity>
+-
+-            <Text style={tpinModalStyles.modalTitle}>Reset Transaction PIN</Text>
+-            <Text style={tpinModalStyles.modalDescription}>
+-              Verify your identity to reset your TPIN.
+-            </Text>
+-
+-            <Text style={tpinModalStyles.sectionLabel}>Verify Identity Via</Text>
+-            
+-            <View style={tpinModalStyles.channelContainer}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOtpChannel("MOBILE");
+-                  setOtpValue("");
+-                  setIsOtpSent(false);
+-                  setOtpTimer(0);
+-                }}
+-                style={[
+-                  tpinModalStyles.channelCard,
+-                  otpChannel === "MOBILE" && tpinModalStyles.channelCardSelected,
+-                ]}
+-              >
+-                <Vector
+-                  as="feather"
+-                  name="smartphone"
+-                  size={20}
+-                  color={otpChannel === "MOBILE" ? "#FF8E72" : "#94a3b8"}
+-                  style={{ marginBottom: 6 }}
+-                />
+-                <Text style={tpinModalStyles.channelTitle}>SMS OTP</Text>
+-                <Text style={tpinModalStyles.channelValue}>
+-                  {currentUser?.MobileNumber || currentUser?.mobileNo ? maskMobile(currentUser.MobileNumber || currentUser.mobileNo) : "N/A"}
+-                </Text>
+-              </TouchableOpacity>
+-            </View>
+-
+-            <TouchableOpacity
+-              onPress={handleSendOtp}
+-              disabled={otpTimer > 0}
+-              style={[
+-                tpinModalStyles.otpButton,
+-                otpTimer > 0 && { borderColor: "rgba(59, 47, 47, 0.1)" }
+-              ]}
+-            >
+-              <Text style={[tpinModalStyles.otpButtonText, otpTimer > 0 && { color: "#8E7F77" }]}>
+-                {otpTimer > 0 ? `Resend OTP in ${otpTimer}s` : isOtpSent ? "Resend OTP Code" : "Send OTP Verification"}
+-              </Text>
+-            </TouchableOpacity>
+-
+-            {isOtpSent && (
+-              <View style={tpinModalStyles.successAlert}>
+-                <Text style={tpinModalStyles.successAlertText}>
+-                  ✓ OTP successfully sent to your registered {otpChannel === "EMAIL" ? "email address" : "mobile number"}.
+-                </Text>
+-              </View>
+-            )}
+-
+-            {isOtpSent && (
+-              <View style={tpinModalStyles.inputWrapper}>
+-                <Text style={tpinModalStyles.inputLabel}>ENTER OTP CODE</Text>
+-                <View style={{ flexDirection: "row", gap: 10 }}>
+-                  <TextInput
+-                    placeholder="Enter 6-digit OTP"
+-                    placeholderTextColor="#94a3b8"
+-                    keyboardType="numeric"
+-                    maxLength={6}
+-                    editable={!isOtpVerified}
+-                    value={otpValue}
+-                    onChangeText={(val) => setOtpValue(val.replace(/[^0-9]/g, ''))}
+-                    style={[tpinModalStyles.textInput, { flex: 1 }]}
+-                  />
+-                  <TouchableOpacity
+-                    onPress={handleVerifyOtp}
+-                    disabled={otpValue.length < 6 || verifyOtpLoading || isOtpVerified}
+-                    style={[
+-                      tpinModalStyles.otpVerifyBtn,
+-                      isOtpVerified && { backgroundColor: "#10b981" },
+-                      (otpValue.length < 6 && !isOtpVerified) && { opacity: 0.5 }
+-                    ]}
+-                  >
+-                    {verifyOtpLoading ? (
+-                      <ActivityIndicator color="#fff" size="small" />
+-                    ) : (
+-                      <Text style={tpinModalStyles.otpVerifyBtnText}>
+-                        {isOtpVerified ? "Verified" : "Verify"}
+-                      </Text>
+-                    )}
+-                  </TouchableOpacity>
+-                </View>
+-              </View>
+-            )}
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>NEW 4-DIGIT TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Enter 4-digit TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showResetPin}
+-                  value={resetPin}
+-                  onChangeText={(val) => setResetPin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowResetPin(!showResetPin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showResetPin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>CONFIRM 4-DIGIT TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Confirm 4-digit TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showResetConfirmPin}
+-                  value={resetConfirmPin}
+-                  onChangeText={(val) => setResetConfirmPin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowResetConfirmPin(!showResetConfirmPin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showResetConfirmPin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.modalButtonRow}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOpenResetTpin(false);
+-                  setResetPin("");
+-                  setResetConfirmPin("");
+-                  setOtpValue("");
+-                  setIsOtpSent(false);
+-                  setOtpTimer(0);
+-                  setIsOtpVerified(false);
+-                  setShowResetPin(false);
+-                  setShowResetConfirmPin(false);
+-                }}
+-                disabled={resetLoading}
+-                style={tpinModalStyles.modalCancelButton}
+-              >
+-                <Text style={tpinModalStyles.modalCancelButtonText}>Cancel</Text>
+-              </TouchableOpacity>
+-              <TouchableOpacity
+-                onPress={handleResetTpinSubmit}
+-                disabled={resetPin.length !== 4 || resetConfirmPin.length !== 4 || resetLoading}
+-                style={[
+-                  tpinModalStyles.modalConfirmButton,
+-                  (resetPin.length !== 4 || resetConfirmPin.length !== 4) && { opacity: 0.5 }
+-                ]}
+-              >
+-                {resetLoading ? (
+-                  <ActivityIndicator color="#fff" />
+-                ) : (
+-                  <Text style={tpinModalStyles.modalConfirmButtonText}>Reset TPIN</Text>
+-                )}
+-              </TouchableOpacity>
+-            </View>
+-          </View>
+-        </View>
+-      </Modal>
+-
+-      {/* Change TPIN Modal */}
+-      <Modal
+-        visible={openChangeTpin}
+-        transparent={true}
+-        animationType="fade"
+-        onRequestClose={() => {
+-          setOpenChangeTpin(false);
+-          setOldTpin("");
+-          setNewTpin("");
+-          setConfirmNewTpin("");
+-          setShowOldTpin(false);
+-          setShowNewTpin(false);
+-          setShowConfirmNewTpin(false);
+-        }}
+-      >
+-        <View style={tpinModalStyles.modalContainer}>
+-          <View style={tpinModalStyles.modalContent}>
+-            <TouchableOpacity
+-              style={tpinModalStyles.closeButton}
+-              onPress={() => {
+-                setOpenChangeTpin(false);
+-                setOldTpin("");
+-                setNewTpin("");
+-                setConfirmNewTpin("");
+-                setShowOldTpin(false);
+-                setShowNewTpin(false);
+-                setShowConfirmNewTpin(false);
+-              }}
+-            >
+-              <Vector as="feather" name="x" size={16} color="#3B2F2F" />
+-            </TouchableOpacity>
+-
+-            <Text style={tpinModalStyles.modalTitle}>Change Transaction PIN</Text>
+-            <Text style={tpinModalStyles.modalDescription}>
+-              Enter your current TPIN and set a new one.
+-            </Text>
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>CURRENT 4-DIGIT TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Enter current TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showOldTpin}
+-                  value={oldTpin}
+-                  onChangeText={(val) => setOldTpin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowOldTpin(!showOldTpin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showOldTpin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>NEW 4-DIGIT TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Enter new TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showNewTpin}
+-                  value={newTpin}
+-                  onChangeText={(val) => setNewTpin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowNewTpin(!showNewTpin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showNewTpin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.inputWrapper}>
+-              <Text style={tpinModalStyles.inputLabel}>CONFIRM NEW TPIN</Text>
+-              <View style={tpinModalStyles.inputWithIconRow}>
+-                <TextInput
+-                  placeholder="Confirm new TPIN"
+-                  placeholderTextColor="#94a3b8"
+-                  keyboardType="numeric"
+-                  maxLength={4}
+-                  secureTextEntry={!showConfirmNewTpin}
+-                  value={confirmNewTpin}
+-                  onChangeText={(val) => setConfirmNewTpin(val.replace(/[^0-9]/g, ''))}
+-                  style={tpinModalStyles.textInputClean}
+-                />
+-                <TouchableOpacity onPress={() => setShowConfirmNewTpin(!showConfirmNewTpin)}>
+-                  <Vector
+-                    as="feather"
+-                    name={showConfirmNewTpin ? "eye" : "eye-off"}
+-                    size={20}
+-                    color="#94a3b8"
+-                  />
+-                </TouchableOpacity>
+-              </View>
+-            </View>
+-
+-            <View style={tpinModalStyles.modalButtonRow}>
+-              <TouchableOpacity
+-                onPress={() => {
+-                  setOpenChangeTpin(false);
+-                  setOldTpin("");
+-                  setNewTpin("");
+-                  setConfirmNewTpin("");
+-                  setShowOldTpin(false);
+-                  setShowNewTpin(false);
+-                  setShowConfirmNewTpin(false);
+-                }}
+-                disabled={changeLoading}
+-                style={tpinModalStyles.modalCancelButton}
+-              >
+-                <Text style={tpinModalStyles.modalCancelButtonText}>Cancel</Text>
+-              </TouchableOpacity>
+-              <TouchableOpacity
+-                onPress={handleChangeTpinSubmit}
+-                disabled={oldTpin.length !== 4 || newTpin.length !== 4 || confirmNewTpin.length !== 4 || changeLoading}
+-                style={[
+-                  tpinModalStyles.modalConfirmButton,
+-                  (oldTpin.length !== 4 || newTpin.length !== 4 || confirmNewTpin.length !== 4) && { opacity: 0.5 }
+-                ]}
+-              >
+-                {changeLoading ? (
+-                  <ActivityIndicator color="#fff" />
+-                ) : (
+-                  <Text style={tpinModalStyles.modalConfirmButtonText}>Change TPIN</Text>
+-                )}
+-              </TouchableOpacity>
+-            </View>
+-          </View>
+-        </View>
+-      </Modal>
+-
+-      <ToastConfig visible={showToast} message={toastMsg} onClose={() => setShowToast(false)} />
+-    </SafeAreaView>
+-  );
+-};
+-
+-const localStyles = StyleSheet.create({
+-  container: {
+-    flex: 1,
+-    backgroundColor: "#FDF4F0",
+-  },
+-  topBackground: {
+-    position: 'absolute',
+-    top: 0,
+-    left: 0,
+-    right: 0,
+-    height: 400,
+-    overflow: 'hidden',
+-    zIndex: 0,
+-  },
+-  shape1: {
+-    position: 'absolute',
+-    top: -50,
+-    right: -80,
+-    width: 300,
+-    height: 300,
+-    borderRadius: 150,
+-    backgroundColor: 'rgba(255, 142, 114, 0.15)',
+-  },
+-  shape2: {
+-    position: 'absolute',
+-    top: 150,
+-    left: -100,
+-    width: 250,
+-    height: 250,
+-    borderRadius: 125,
+-    backgroundColor: 'rgba(255, 218, 185, 0.25)',
+-  },
+-  glassOverlay: {
+-    ...StyleSheet.absoluteFillObject,
+-    backgroundColor: 'rgba(253, 244, 240, 0.4)',
+-  },
+-  header: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    justifyContent: 'space-between',
+-    paddingHorizontal: 20,
+-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
+-    paddingBottom: 15,
+-    zIndex: 10,
+-  },
+-  backButton: {
+-    width: 46,
+-    height: 46,
+-    borderRadius: 23,
+-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-    ...Platform.select({
+-      ios: { shadowColor: '#FF8E72', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10 },
+-      android: { elevation: 3 }
+-    }),
+-    borderWidth: 1,
+-    borderColor: 'rgba(255, 255, 255, 0.9)',
+-  },
+-  headerTitle: {
+-    fontSize: RFValue(18),
+-    fontFamily: FONTS.bold,
+-    color: '#3B2F2F',
+-    letterSpacing: 0.5,
+-  },
+-  cardShadowWrapper: {
+-    marginHorizontal: 20,
+-    marginBottom: 30,
+-    borderRadius: 30,
+-    ...Platform.select({
+-      ios: { shadowColor: '#3B2F2F', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.25, shadowRadius: 25 },
+-      android: { elevation: 15 }
+-    }),
+-  },
+-  eliteCard: {
+-    padding: 26,
+-    borderRadius: 30,
+-    position: 'relative',
+-    overflow: 'hidden',
+-    borderWidth: 1,
+-    borderColor: 'rgba(255,255,255,0.1)',
+-  },
+-  ambientCardLight: {
+-    position: 'absolute',
+-    top: -50,
+-    left: -50,
+-    width: 200,
+-    height: 200,
+-    borderRadius: 100,
+-    backgroundColor: 'rgba(255, 142, 114, 0.12)',
+-  },
+-  sweepEffect: {
+-    position: 'absolute',
+-    top: 0,
+-    bottom: 0,
+-    width: 100,
+-    backgroundColor: 'rgba(255,255,255,0.08)',
+-    transform: [{ rotate: '30deg' }],
+-  },
+-  balanceTopRow: {
+-    flexDirection: 'row',
+-    justifyContent: 'space-between',
+-    alignItems: 'center',
+-    marginBottom: 25,
+-  },
+-  chipIconBox: {
+-    opacity: 0.8,
+-  },
+-  eliteBadgePill: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    backgroundColor: 'rgba(255, 142, 114, 0.15)',
+-    paddingHorizontal: 12,
+-    paddingVertical: 6,
+-    borderRadius: 14,
+-    borderWidth: 1,
+-    borderColor: 'rgba(255, 142, 114, 0.3)',
+-    gap: 6,
+-  },
+-  eliteBadgeTxt: {
+-    color: '#FF8E72',
+-    fontSize: RFValue(9),
+-    fontFamily: FONTS.bold,
+-    letterSpacing: 1.5,
+-  },
+-  balanceLabel: {
+-    color: 'rgba(255,255,255,0.5)',
+-    fontSize: RFValue(9),
+-    fontFamily: FONTS.bold,
+-    letterSpacing: 2,
+-    marginBottom: 6,
+-  },
+-  amountContainer: {
+-    flexDirection: 'row',
+-    alignItems: 'baseline',
+-  },
+-  currencySymbol: {
+-    color: '#FFF',
+-    fontSize: RFValue(18),
+-    fontFamily: FONTS.bold,
+-    marginRight: 6,
+-  },
+-  mainAmount: {
+-    color: '#FFF',
+-    fontSize: RFValue(32),
+-    fontFamily: FONTS.bold,
+-    letterSpacing: -1.5,
+-  },
+-  decimalAmount: {
+-    color: 'rgba(255,255,255,0.5)',
+-    fontSize: RFValue(14),
+-    fontFamily: FONTS.medium,
+-  },
+-  balanceFooter: {
+-    marginTop: 25,
+-    flexDirection: 'row',
+-    justifyContent: 'space-between',
+-    alignItems: 'flex-end',
+-  },
+-  footerCol: {
+-    gap: 4,
+-  },
+-  userLabel: {
+-    color: 'rgba(255,255,255,0.4)',
+-    fontSize: RFValue(9),
+-    fontFamily: FONTS.bold,
+-    letterSpacing: 1.5,
+-  },
+-  userName: {
+-    color: '#FFF',
+-    fontSize: RFValue(11),
+-    fontFamily: FONTS.medium,
+-    letterSpacing: 0.5,
+-  },
+-  infoCard: {
+-    marginHorizontal: 10,
+-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+-    borderRadius: 36,
+-    padding: 32,
+-    ...Platform.select({
+-      ios: { shadowColor: '#FF8E72', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 20 },
+-      android: { elevation: 6 }
+-    }),
+-    borderWidth: 1.5,
+-    borderColor: 'rgba(255, 255, 255, 0.9)',
+-  },
+-  iconGlowWrapper: {
+-    alignSelf: 'center',
+-    marginBottom: 20,
+-    ...Platform.select({
+-      ios: { shadowColor: '#FF8E72', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15 },
+-      android: { elevation: 10 }
+-    }),
+-  },
+-  iconCircle: {
+-    width: 64,
+-    height: 64,
+-    borderRadius: 32,
+-    backgroundColor: '#FF8E72',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-    borderWidth: 3,
+-    borderColor: '#FFF',
+-  },
+-  infoTitle: {
+-    fontSize: RFValue(18),
+-    fontFamily: FONTS.bold,
+-    color: '#3B2F2F',
+-    textAlign: 'center',
+-    marginBottom: 10,
+-    letterSpacing: -0.5,
+-  },
+-  infoDesc: {
+-    fontSize: RFValue(11),
+-    fontFamily: FONTS.medium,
+-    color: '#8E7F77',
+-    textAlign: 'center',
+-    lineHeight: RFValue(18),
+-    marginBottom: 30,
+-    paddingHorizontal: 15,
+-  },
+-  timelineWrapper: {
+-    marginBottom: 35,
+-    paddingHorizontal: 10,
+-  },
+-  timelineNode: {
+-    flexDirection: 'row',
+-    minHeight: 70,
+-  },
+-  nodeIconCol: {
+-    alignItems: 'center',
+-    width: 32,
+-    marginRight: 15,
+-  },
+-  nodeIconBox: {
+-    width: 32,
+-    height: 32,
+-    borderRadius: 16,
+-    backgroundColor: '#FFF',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-    borderWidth: 1,
+-    borderColor: 'rgba(255, 142, 114, 0.3)',
+-    ...Platform.select({
+-      ios: { shadowColor: '#FF8E72', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
+-      android: { elevation: 3 }
+-    }),
+-  },
+-  nodeConnector: {
+-    flex: 1,
+-    width: 2,
+-    backgroundColor: 'rgba(255, 142, 114, 0.2)',
+-    marginVertical: 4,
+-  },
+-  nodeContent: {
+-    flex: 1,
+-    paddingBottom: 25,
+-    paddingTop: 4,
+-  },
+-  nodeTitle: {
+-    fontSize: RFValue(12),
+-    fontFamily: FONTS.bold,
+-    color: '#3B2F2F',
+-    marginBottom: 4,
+-  },
+-  nodeDesc: {
+-    fontSize: RFValue(10),
+-    fontFamily: FONTS.medium,
+-    color: '#8E7F77',
+-  },
+-  startBtnWrapper: {
+-    position: 'relative',
+-    alignItems: 'center',
+-  },
+-  startBtnGlow: {
+-    position: 'absolute',
+-    width: '90%',
+-    height: 60,
+-    backgroundColor: '#FF8E72',
+-    borderRadius: 20,
+-    top: 5,
+-  },
+-  startBtn: {
+-    width: '100%',
+-    borderRadius: 20,
+-    overflow: 'hidden',
+-    borderWidth: 1,
+-    borderColor: 'rgba(255, 255, 255, 0.5)',
+-  },
+-  startBtnGradient: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    justifyContent: 'center',
+-    paddingVertical: 18,
+-    gap: 10,
+-  },
+-  startBtnText: {
+-    color: '#FFF',
+-    fontSize: RFValue(12),
+-    fontFamily: FONTS.bold,
+-    letterSpacing: 0.5,
+-  },
+-  formContainer: {
+-    marginHorizontal: 10,
+-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+-    borderRadius: 36,
+-    padding: 32,
+-    ...Platform.select({
+-      ios: { shadowColor: '#3B2F2F', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.1, shadowRadius: 25 },
+-      android: { elevation: 8 }
+-    }),
+-    borderWidth: 1.5,
+-    borderColor: '#FFF',
+-  },
+-  formHeader: {
+-    flexDirection: 'row',
+-    justifyContent: 'space-between',
+-    alignItems: 'center',
+-    marginBottom: 30,
+-  },
+-  formTitle: {
+-    fontSize: RFValue(16),
+-    fontFamily: FONTS.bold,
+-    color: '#3B2F2F',
+-    letterSpacing: -0.5,
+-  },
+-  cancelBtn: {
+-    width: 32,
+-    height: 32,
+-    borderRadius: 16,
+-    backgroundColor: '#FFF',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-    borderWidth: 1,
+-    borderColor: 'rgba(59, 47, 47, 0.1)',
+-  },
+-  amountHeroSection: {
+-    alignItems: 'center',
+-    marginBottom: 35,
+-    padding: 25,
+-    borderRadius: 28,
+-    position: 'relative',
+-    overflow: 'hidden',
+-    borderWidth: 1,
+-    borderColor: 'rgba(255, 255, 255, 0.8)',
+-  },
+-  amountHeroBackground: {
+-    ...StyleSheet.absoluteFillObject,
+-  },
+-  amountHeroLabel: {
+-    fontSize: RFValue(9),
+-    fontFamily: FONTS.bold,
+-    color: '#FF8E72',
+-    textTransform: 'uppercase',
+-    letterSpacing: 1.5,
+-    marginBottom: 10,
+-  },
+-  amountInputWrapper: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    justifyContent: 'center',
+-  },
+-  amountHeroCurrency: {
+-    fontSize: RFValue(24),
+-    fontFamily: FONTS.bold,
+-    color: '#3B2F2F',
+-    marginRight: 8,
+-    marginTop: -6,
+-  },
+-  amountHeroInput: {
+-    fontSize: RFValue(36),
+-    fontFamily: FONTS.bold,
+-    color: '#3B2F2F',
+-    minWidth: 120,
+-    textAlign: 'center',
+-    letterSpacing: -1.5,
+-    // @ts-ignore
+-    outlineStyle: 'none',
+-  },
+-  amountGlowLine: {
+-    width: '40%',
+-    height: 3,
+-    backgroundColor: '#FF8E72',
+-    borderRadius: 2,
+-    marginTop: 15,
+-    opacity: 0.8,
+-  },
+-  inputGroup: {
+-    marginBottom: 22,
+-  },
+-  inputLabel: {
+-    fontSize: RFValue(9),
+-    fontFamily: FONTS.bold,
+-    color: '#8E7F77',
+-    marginBottom: 10,
+-    marginLeft: 6,
+-    letterSpacing: 1.5,
+-  },
+-  inputWrapper: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    height: 60,
+-    backgroundColor: '#FFF',
+-    borderRadius: 20,
+-    paddingHorizontal: 8,
+-    borderWidth: 1.5,
+-    borderColor: 'rgba(59, 47, 47, 0.05)',
+-  },
+-  inputWrapperActive: {
+-    borderColor: 'rgba(255, 142, 114, 0.4)',
+-    ...Platform.select({
+-      ios: { shadowColor: '#FF8E72', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+-      android: { elevation: 2 }
+-    }),
+-  },
+-  inputIconCont: {
+-    width: 44,
+-    height: 44,
+-    borderRadius: 14,
+-    backgroundColor: 'rgba(255, 142, 114, 0.05)',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-    marginRight: 12,
+-  },
+-  textInput: {
+-    flex: 1,
+-    fontSize: 16,
+-    fontFamily: FONTS.medium,
+-    color: '#3B2F2F',
+-    // @ts-ignore
+-    outlineStyle: 'none',
+-  },
+-  verifiedRow: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    marginTop: 8,
+-    marginLeft: 8,
+-    gap: 6,
+-  },
+-  receiverHint: {
+-    fontSize: 12,
+-    fontFamily: FONTS.medium,
+-    color: '#10b981',
+-  },
+-  warningBox: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    backgroundColor: 'rgba(217, 119, 6, 0.08)',
+-    padding: 16,
+-    borderRadius: 20,
+-    gap: 12,
+-    marginTop: 15,
+-    borderWidth: 1,
+-    borderColor: 'rgba(217, 119, 6, 0.15)',
+-  },
+-  warningIconBox: {
+-    width: 28,
+-    height: 28,
+-    borderRadius: 14,
+-    backgroundColor: 'rgba(217, 119, 6, 0.15)',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-  },
+-  warningText: {
+-    fontSize: 12,
+-    fontFamily: FONTS.medium,
+-    color: '#92400e',
+-    flex: 1,
+-    lineHeight: 18,
+-  },
+-  footerActions: {
+-    marginTop: 35,
+-  },
+-  mainActionBtn: {
+-    borderRadius: 22,
+-    overflow: 'hidden',
+-    ...Platform.select({
+-      ios: { shadowColor: '#FF8E72', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20 },
+-      android: { elevation: 8 }
+-    }),
+-  },
+-  mainActionBtnDisabled: {
+-    opacity: 0.5,
+-  },
+-  mainBtnGradient: {
+-    paddingVertical: 20,
+-    alignItems: 'center',
+-    justifyContent: 'center',
+-  },
+-  btnContentRow: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    gap: 10,
+-  },
+-  mainBtnText: {
+-    color: '#FFF',
+-    fontSize: RFValue(15),
+-    fontFamily: FONTS.bold,
+-    letterSpacing: 0.5,
+-  },
+-});
+-
+-const tpinModalStyles = StyleSheet.create({
+-  modalContainer: {
+-    flex: 1,
+-    justifyContent: "center",
+-    alignItems: "center",
+-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+-  },
+-  modalContent: {
+-    backgroundColor: "#fff",
+-    borderRadius: 24,
+-    padding: 24,
+-    width: "90%",
+-    maxWidth: 400,
+-    position: "relative",
+-    shadowColor: "#FF8E72",
+-    shadowOffset: { width: 0, height: 10 },
+-    shadowOpacity: 0.15,
+-    shadowRadius: 20,
+-    elevation: 10,
+-    borderWidth: 1,
+-    borderColor: 'rgba(255, 142, 114, 0.1)',
+-  },
+-  closeButton: {
+-    position: "absolute",
+-    right: 18,
+-    top: 18,
+-    zIndex: 10,
+-    width: 32,
+-    height: 32,
+-    borderRadius: 16,
+-    backgroundColor: 'rgba(59, 47, 47, 0.05)',
+-    justifyContent: 'center',
+-    alignItems: 'center',
+-  },
+-  modalTitle: {
+-    fontSize: 18,
+-    fontFamily: FONTS.bold,
+-    color: "#3B2F2F",
+-    textAlign: "center",
+-    marginBottom: 8,
+-    marginTop: 10,
+-  },
+-  modalDescription: {
+-    fontSize: 13,
+-    color: "#8E7F77",
+-    textAlign: "center",
+-    marginBottom: 24,
+-    paddingHorizontal: 10,
+-    lineHeight: 18,
+-    fontFamily: FONTS.medium,
+-  },
+-  sectionLabel: {
+-    fontSize: 13,
+-    fontFamily: FONTS.bold,
+-    color: "#3B2F2F",
+-    marginBottom: 12,
+-    letterSpacing: 0.5,
+-  },
+-  channelContainer: {
+-    flexDirection: "row",
+-    justifyContent: "space-between",
+-    gap: 12,
+-    marginBottom: 20,
+-  },
+-  channelCard: {
+-    flex: 1,
+-    paddingVertical: 14,
+-    paddingHorizontal: 10,
+-    borderRadius: 16,
+-    borderWidth: 1.5,
+-    borderColor: "rgba(59, 47, 47, 0.05)",
+-    backgroundColor: "#fafafa",
+-    alignItems: "center",
+-    justifyContent: "center",
+-  },
+-  channelCardSelected: {
+-    borderColor: "#FF8E72",
+-    backgroundColor: "rgba(255, 142, 114, 0.05)",
+-  },
+-  channelTitle: {
+-    fontSize: 13,
+-    fontFamily: FONTS.bold,
+-    color: "#3B2F2F",
+-    marginBottom: 4,
+-    marginTop: 8,
+-  },
+-  channelValue: {
+-    fontSize: 11,
+-    color: "#8E7F77",
+-    textAlign: "center",
+-    fontFamily: FONTS.medium,
+-  },
+-  otpButton: {
+-    height: 48,
+-    borderRadius: 12,
+-    justifyContent: "center",
+-    alignItems: "center",
+-    marginBottom: 20,
+-    borderWidth: 1.5,
+-    borderColor: "#FF8E72",
+-    backgroundColor: "transparent",
+-  },
+-  otpButtonText: {
+-    color: "#FF8E72",
+-    fontFamily: FONTS.bold,
+-    fontSize: 14,
+-  },
+-  otpVerifyBtn: {
+-    backgroundColor: "#FF8E72",
+-    borderRadius: 12,
+-    justifyContent: "center",
+-    alignItems: "center",
+-    paddingHorizontal: 20,
+-  },
+-  otpVerifyBtnText: {
+-    color: "#fff",
+-    fontFamily: FONTS.bold,
+-    fontSize: 14,
+-  },
+-  successAlert: {
+-    backgroundColor: "rgba(16, 185, 129, 0.1)",
+-    borderColor: "rgba(16, 185, 129, 0.2)",
+-    borderWidth: 1,
+-    borderRadius: 12,
+-    padding: 12,
+-    marginBottom: 20,
+-  },
+-  successAlertText: {
+-    color: "#059669",
+-    fontSize: 12,
+-    fontFamily: FONTS.medium,
+-  },
+-  inputWrapper: {
+-    marginBottom: 16,
+-  },
+-  inputLabel: {
+-    fontSize: 11,
+-    fontFamily: FONTS.bold,
+-    color: "#8E7F77",
+-    marginBottom: 8,
+-    letterSpacing: 0.5,
+-  },
+-  textInput: {
+-    borderWidth: 1.5,
+-    borderColor: "rgba(59, 47, 47, 0.05)",
+-    borderRadius: 12,
+-    padding: 12,
+-    fontSize: 15,
+-    color: "#3B2F2F",
+-    backgroundColor: "#fafafa",
+-    fontFamily: FONTS.medium,
+-  },
+-  textInputClean: {
+-    padding: 12,
+-    fontSize: 15,
+-    color: "#3B2F2F",
+-    flex: 1,
+-    fontFamily: FONTS.medium,
+-    height: "100%",
+-  },
+-  inputWithIconRow: {
+-    flexDirection: "row",
+-    alignItems: "center",
+-    borderWidth: 1.5,
+-    borderColor: "rgba(59, 47, 47, 0.05)",
+-    borderRadius: 12,
+-    backgroundColor: "#fafafa",
+-    height: 50,
+-    paddingRight: 12,
+-  },
+-  modalButtonRow: {
+-    flexDirection: "row",
+-    justifyContent: "flex-end",
+-    gap: 12,
+-    marginTop: 20,
+-  },
+-  modalCancelButton: {
+-    paddingVertical: 12,
+-    paddingHorizontal: 20,
+-    borderRadius: 12,
+-    borderWidth: 1.5,
+-    borderColor: "rgba(59, 47, 47, 0.1)",
+-    justifyContent: "center",
+-    alignItems: "center",
+-  },
+-  modalCancelButtonText: {
+-    color: "#3B2F2F",
+-    fontFamily: FONTS.bold,
+-    fontSize: 14,
+-  },
+-  modalConfirmButton: {
+-    backgroundColor: "#FF8E72",
+-    paddingVertical: 12,
+-    paddingHorizontal: 24,
+-    borderRadius: 12,
+-    justifyContent: "center",
+-    alignItems: "center",
+-    minWidth: 120,
+-    shadowColor: "#FF8E72",
+-    shadowOffset: { width: 0, height: 4 },
+-    shadowOpacity: 0.3,
+-    shadowRadius: 8,
+-    elevation: 4,
+-  },
+-  modalConfirmButtonText: {
+-    color: "#fff",
+-    fontFamily: FONTS.bold,
+-    fontSize: 14,
+-  },
+-  summaryCard: {
+-    backgroundColor: "rgba(59, 47, 47, 0.02)",
+-    borderRadius: 16,
+-    padding: 16,
+-    marginBottom: 20,
+-    borderWidth: 1,
+-    borderColor: "rgba(59, 47, 47, 0.05)",
+-  },
+-  summaryRow: {
+-    flexDirection: "row",
+-    justifyContent: "space-between",
+-    marginBottom: 8,
+-  },
+-  summaryLabel: {
+-    fontSize: 13,
+-    color: "#8E7F77",
+-    fontFamily: FONTS.medium,
+-  },
+-  summaryValue: {
+-    fontSize: 13,
+-    fontFamily: FONTS.bold,
+-    color: "#3B2F2F",
+-  },
+-  summaryAmount: {
+-    fontSize: 15,
+-    fontFamily: FONTS.bold,
+-    color: "#FF8E72",
+-  },
+-  pinCodeInput: {
+-    borderWidth: 1.5,
+-    borderColor: "rgba(59, 47, 47, 0.1)",
+-    borderRadius: 16,
+-    paddingVertical: 14,
+-    fontSize: 28,
+-    textAlign: "center",
+-    letterSpacing: 12,
+-    fontFamily: FONTS.bold,
+-    color: "#3B2F2F",
+-    backgroundColor: "#fafafa",
+-    width: "65%",
+-    alignSelf: "center",
+-    marginBottom: 24,
++} from "react-native";
++import { RFValue } from "react-native-responsive-fontsize";
++import { useRecoilValue } from "recoil";
++import { useIsFocused, useNavigation } from "@react-navigation/native";
++
++import { ProfileState } from "../../atoms";
++import { GetWalletBalance, WalletTransfer } from "app/http-services";
++import { FONTS, SIZES } from "../../constants/Assets";
++import { theme } from "../../core/theme";
++
++import HomeHeader from "app/components/HomeHeader";
++import Button from "app/components/controls/Button";
++import Container from "app/theme/Container";
++import Vector from "app/assets/vectors";
++import ToastConfig from "app/components/ToastConfig";
++import styles from "app/styles";
++import { LinearGradient } from "expo-linear-gradient";
++import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
++
++const MyWalletTransfer = () => {
++  const { width } = useWindowDimensions();
++  const navigation = useNavigation();
++  const currentToken = useRecoilValue(ProfileState);
++
++  const isFocused = useIsFocused();
++
++  const [currency, setCurrency] = useState("£");
++  const [reward, setReward] = useState("");
++  const [accountBalance, setAccountBalance] = useState("0.00");
++  const [withdrawAccountBalance, setWithdrawAccountBalance] = useState("");
++
++  const [receiverId, setReceiverId] = useState("");
++  const [receiverName, setReceiverName] = useState("");
++  const [amount, setAmount] = useState("");
++  const [email, setEmail] = useState("");
++  const [otp, setOtp] = useState("");
++
++  const [showTransferForm, setShowTransferForm] = useState(false);
++  const [loading, setLoading] = useState(false);
++  const [submitting, setSubmitting] = useState(false);
++
++  const [showToast, setShowToast] = useState(false);
++  const [toastMsg, setToastMsg] = useState("");
++
++  useEffect(() => {
++    const _currency = (typeof process !== 'undefined' && process.env && process.env.CURRENCY_SYMBOL) || "£";
++    setCurrency(_currency);
++    fetchWalletBalance(currentToken.tokenId, currentToken.remitterId);
++  }, [isFocused]);
++
++  const fetchWalletBalance = async (tokenId: string, remitterId: string) => {
++    try {
++      setLoading(true);
++      const res = await GetWalletBalance(tokenId);
++      if (res?.status === 200) {
++        setAccountBalance(res?.data?.BalanceAmount || "0.00");
++        setWithdrawAccountBalance(res?.data?.WD_BalanceAmount || "0.00");
++      }
++    } catch (error) {
++      console.error("Error fetching wallet balance:", error);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  const handleConfirmTransfer = async () => {
++    if (!receiverId || !amount || !email) {
++      setToastMsg("Please fill all fields");
++      setShowToast(true);
++      return;
++    }
++
++    try {
++      setSubmitting(true);
++
++      const reqBody = {
++        ToRemitterID: receiverId,
++        Amount: amount,
++        RemitterEmail: email,
++        OTP: otp,
++      };
++
++      const res = await WalletTransfer(reqBody);
++      console.log("RES", res)
++
++      if (res?.data?.StatusCode === "ER0073") {
++        setToastMsg(res.data.StatusMsg);
++        fetchWalletBalance(currentToken.tokenId, currentToken.remitterId);
++      } else {
++        setToastMsg(res?.data?.StatusMsg || "Transaction failed. Please try again.");
++      }
++
++      // 🔥 Common reset code — runs for both IF & ELSE
++      setReceiverId("");
++      setReceiverName("");
++      setAmount("");
++      setEmail("");
++      setOtp("");
++      setShowTransferForm(false);
++
++      setTimeout(() => {
++        navigation.navigate("HomeDrawer");
++      }, 500);
++
++    } catch (error) {
++      console.error("Wallet Transfer Error: ", error);
++      setToastMsg("Something went wrong. Please try again.");
++    } finally {
++      setShowToast(true);
++      setSubmitting(false);
++    }
++  };
++
++  const [integerPart, decimalPart = "00"] = accountBalance.toString().split(".");
++
++  return (
++    <SafeAreaView style={localStyles.container}>
++      <HomeHeader name={currentToken.firstName} currency={currency} reward={reward} />
++      <Container>
++        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
++          {/* Premium Wallet Hero Card */}
++          <Animated.View entering={FadeInDown.delay(200)}>
++            <LinearGradient
++              colors={['#ffffff', '#f8fafc']}
++              style={localStyles.heroCard}
++            >
++              <View style={localStyles.heroTopRow}>
++                <View style={localStyles.walletIconBox}>
++                  <Vector as="ionicons" name="wallet" size={24} color="#0ea5e9" />
++                </View>
++                <TouchableOpacity style={localStyles.balanceTitleRow} activeOpacity={0.7}>
++                  <Text style={localStyles.heroBalanceTitle}>Personal Wallet</Text>
++                  <Vector as="ionicons" name="chevron-forward" size={16} color="#0ea5e9" />
++                </TouchableOpacity>
++              </View>
++
++              <View style={localStyles.balanceMainArea}>
++                <Text style={localStyles.balanceCurrency}>{currency}</Text>
++                <Text style={localStyles.balanceValue}>
++                  {integerPart}<Text style={localStyles.balanceDecimal}>.{decimalPart}</Text>
++                </Text>
++              </View>
++              <Text style={localStyles.balanceLabel}>Account Balance Available</Text>
++
++              <View style={localStyles.heroActionRow}>
++                <TouchableOpacity
++                  onPress={() => navigation.navigate("withdraw")}
++                  style={[localStyles.heroBtn, localStyles.heroBtnSecondary]}
++                >
++                  <Vector as="feather" name="arrow-up-right" size={18} color="#0ea5e9" style={{ marginRight: 8 }} />
++                  <Text style={localStyles.heroBtnTextSecondary}>Withdraw</Text>
++                </TouchableOpacity>
++
++                <TouchableOpacity
++                  onPress={() => navigation.navigate("AddFund")}
++                  style={[localStyles.heroBtn, localStyles.heroBtnPrimary]}
++                >
++                  <Vector as="feather" name="plus" size={18} color="#fff" style={{ marginRight: 8 }} />
++                  <Text style={localStyles.heroBtnTextPrimary}>Add Fund</Text>
++                </TouchableOpacity>
++              </View>
++            </LinearGradient>
++          </Animated.View>
++
++          {/* Transfer Section */}
++          {!showTransferForm ? (
++            <Animated.View entering={FadeInDown.delay(400)} style={localStyles.stepsCard}>
++              <View style={localStyles.stepsHeader}>
++                <View style={localStyles.blueIndicator} />
++                <Text style={localStyles.stepsTitle}>Instant Transfer</Text>
++              </View>
++
++              <Text style={localStyles.stepsDesc}>
++                Send money seamlessly to another wallet in real-time.
++              </Text>
++
++              <View style={localStyles.timelineWrapper}>
++                {[
++                  { title: "Remitter ID", desc: "Target receiver's unique ID" },
++                  { title: "Amount", desc: "Value you wish to send" },
++                  { title: "Verification", desc: "Confirm with registered email" }
++                ].map((step, index) => (
++                  <View key={index} style={localStyles.timelineItem}>
++                    <View style={localStyles.timelineIconCol}>
++                      <View style={localStyles.timelineDotOuter}>
++                        <View style={localStyles.timelineDotInner} />
++                      </View>
++                      {index < 2 && <View style={localStyles.timelineLine} />}
++                    </View>
++                    <View style={localStyles.timelineContent}>
++                      <Text style={localStyles.stepName}>{step.title}</Text>
++                      <Text style={localStyles.stepDesc}>{step.desc}</Text>
++                    </View>
++                  </View>
++                ))}
++              </View>
++
++              <TouchableOpacity
++                style={localStyles.startBtn}
++                activeOpacity={0.8}
++                onPress={() => setShowTransferForm(true)}
++              >
++                <LinearGradient
++                  colors={['#0ea5e9', '#0369a1']}
++                  start={{ x: 0, y: 0 }}
++                  end={{ x: 1, y: 0 }}
++                  style={localStyles.startBtnGradient}
++                >
++                  <Text style={localStyles.startBtnText}>Start New Transfer</Text>
++                  <Vector as="feather" name="arrow-right" size={18} color="#fff" />
++                </LinearGradient>
++              </TouchableOpacity>
++            </Animated.View>
++          ) : (
++            <Animated.View entering={FadeInUp} style={localStyles.formCard}>
++              <View style={localStyles.formHeaderRow}>
++                <TouchableOpacity onPress={() => setShowTransferForm(false)} style={localStyles.formBackBtn}>
++                  <Vector as="feather" name="chevron-left" size={24} color="#0369a1" />
++                </TouchableOpacity>
++                <Text style={localStyles.formTitle}>Wallet Transfer</Text>
++                <View style={{ width: 40 }} />
++              </View>
++
++              <View style={localStyles.inputGroup}>
++                <Text style={localStyles.inputLabel}>Receiver ID</Text>
++                <View style={localStyles.inputWrapper}>
++                  <Vector as="feather" name="user" size={18} color="#94a3b8" style={{ marginRight: 12 }} />
++                  <TextInput
++                    style={localStyles.textInput}
++                    placeholder="KM00000001"
++                    placeholderTextColor="#94a3b8"
++                    value={receiverId}
++                    onChangeText={(val) => setReceiverId(val.replace(/[^a-zA-Z0-9]/g, ""))}
++                  />
++                </View>
++                {receiverId ? <Text style={localStyles.receiverHint}>Receiver: {receiverName || 'Verifying...'}</Text> : null}
++              </View>
++
++              <View style={localStyles.inputGroup}>
++                <Text style={localStyles.inputLabel}>Amount To Send</Text>
++                <View style={localStyles.inputWrapper}>
++                  <Text style={localStyles.inputCurrency}>{currency}</Text>
++                  <TextInput
++                    style={[localStyles.textInput, { fontWeight: '700' }]}
++                    placeholder="0.00"
++                    placeholderTextColor="#94a3b8"
++                    keyboardType="numeric"
++                    value={amount}
++                    onChangeText={(val) => {
++                      const onlyNums = val.replace(/[^0-9.]/g, "");
++                      setAmount(onlyNums);
++                    }}
++                  />
++                </View>
++              </View>
++
++              <View style={localStyles.inputGroup}>
++                <Text style={localStyles.inputLabel}>Verification Email</Text>
++                <View style={localStyles.inputWrapper}>
++                  <Vector as="feather" name="mail" size={18} color="#94a3b8" style={{ marginRight: 12 }} />
++                  <TextInput
++                    style={localStyles.textInput}
++                    placeholder="name@email.com"
++                    placeholderTextColor="#94a3b8"
++                    keyboardType="email-address"
++                    autoCapitalize="none"
++                    value={email}
++                    onChangeText={setEmail}
++                  />
++                </View>
++              </View>
++
++              <View style={localStyles.warningBox}>
++                <Vector as="feather" name="info" size={14} color="#64748b" />
++                <Text style={localStyles.warningText}>Only withdrawal-enabled balance can be transferred.</Text>
++              </View>
++
++              <View style={localStyles.footerActions}>
++                <TouchableOpacity
++                  style={[localStyles.mainActionBtn]}
++                  disabled={!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || submitting}
++                  onPress={handleConfirmTransfer}
++                >
++                  <LinearGradient
++                    colors={['#0ea5e9', '#0369a1']}
++                    style={localStyles.mainBtnGradient}
++                  >
++                    {submitting ? <ActivityIndicator color="#fff" /> : <Text style={localStyles.mainBtnText}>Confirm Transfer</Text>}
++                  </LinearGradient>
++                </TouchableOpacity>
++              </View>
++            </Animated.View>
++          )}
++        </ScrollView>
++      </Container>
++      <ToastConfig visible={showToast} message={toastMsg} onClose={() => setShowToast(false)} />
++    </SafeAreaView>
++  );
++};
++
++const localStyles = StyleSheet.create({
++  container: {
++    flex: 1,
++    backgroundColor: "#f8fafc",
++  },
++  heroCard: {
++    margin: 20,
++    borderRadius: 24,
++    padding: 24,
++    backgroundColor: '#fff',
++    ...Platform.select({
++      ios: { shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 15 },
++      android: { elevation: 8 },
++    }),
++  },
++  heroTopRow: {
++    flexDirection: 'row',
++    justifyContent: 'space-between',
++    alignItems: 'center',
++    marginBottom: 20,
++  },
++  walletIconBox: {
++    width: 48,
++    height: 48,
++    borderRadius: 16,
++    backgroundColor: '#f0f9ff',
++    justifyContent: 'center',
++    alignItems: 'center',
++  },
++  balanceTitleRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    backgroundColor: '#f8fafc',
++    paddingVertical: 8,
++    paddingHorizontal: 12,
++    borderRadius: 12,
++  },
++  heroBalanceTitle: {
++    fontSize: SIZES.h4,
++    fontFamily: FONTS.bold,
++    color: '#64748b',
++    marginRight: 6,
++    textTransform: 'uppercase',
++  },
++  balanceMainArea: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    marginBottom: 4,
++  },
++  balanceCurrency: {
++    fontSize: SIZES.h2,
++    fontFamily: FONTS.bold,
++    color: '#0ea5e9',
++    marginRight: 8,
++  },
++  balanceValue: {
++    fontSize: RFValue(28),
++    fontFamily: FONTS.bold,
++    color: '#1e293b',
++  },
++  balanceDecimal: {
++    color: '#94a3b8',
++    fontSize: RFValue(18),
++  },
++  balanceLabel: {
++    fontSize: SIZES.h4,
++    fontFamily: FONTS.medium,
++    color: '#94a3b8',
++    marginBottom: 24,
++  },
++  heroActionRow: {
++    flexDirection: 'row',
++    gap: 12,
++  },
++  heroBtn: {
++    flex: 1,
++    height: 48,
++    borderRadius: 14,
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++  },
++  heroBtnPrimary: {
++    backgroundColor: '#0ea5e9',
++  },
++  heroBtnSecondary: {
++    backgroundColor: '#ffffff',
++    borderWidth: 1.5,
++    borderColor: '#e2e8f0',
++  },
++  heroBtnTextPrimary: {
++    color: '#fff',
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.bold,
++  },
++  heroBtnTextSecondary: {
++    color: '#0ea5e9',
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.bold,
++  },
++  stepsCard: {
++    margin: 20,
++    marginTop: 0,
++    padding: 24,
++    backgroundColor: '#fff',
++    borderRadius: 24,
++    ...Platform.select({
++      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
++      android: { elevation: 4 },
++    }),
++  },
++  stepsHeader: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    marginBottom: 8,
++  },
++  blueIndicator: {
++    width: 4,
++    height: 16,
++    backgroundColor: '#0ea5e9',
++    borderRadius: 2,
++    marginRight: 10,
++  },
++  stepsTitle: {
++    fontSize: SIZES.h2,
++    fontFamily: FONTS.bold,
++    color: '#1e293b',
++  },
++  stepsDesc: {
++    fontSize: SIZES.h4,
++    fontFamily: FONTS.medium,
++    color: '#64748b',
++    marginBottom: 24,
++    lineHeight: 18,
++  },
++  timelineWrapper: {
++    marginBottom: 24,
++  },
++  timelineItem: {
++    flexDirection: 'row',
++    minHeight: 60,
++  },
++  timelineIconCol: {
++    alignItems: 'center',
++    marginRight: 16,
++    width: 20,
++  },
++  timelineDotOuter: {
++    width: 20,
++    height: 20,
++    borderRadius: 10,
++    backgroundColor: '#f0f9ff',
++    justifyContent: 'center',
++    alignItems: 'center',
++    borderWidth: 1.5,
++    borderColor: '#0ea5e9',
++  },
++  timelineDotInner: {
++    width: 8,
++    height: 8,
++    borderRadius: 4,
++    backgroundColor: '#0ea5e9',
++  },
++  timelineLine: {
++    flex: 1,
++    width: 2,
++    backgroundColor: '#e2e8f0',
++    marginVertical: 4,
++  },
++  timelineContent: {
++    flex: 1,
++    paddingBottom: 20,
++  },
++  stepName: {
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.bold,
++    color: '#1e293b',
++    marginBottom: 2,
++  },
++  stepDesc: {
++    fontSize: SIZES.h4,
++    fontFamily: FONTS.medium,
++    color: '#94a3b8',
++  },
++  startBtn: {
++    borderRadius: 16,
++    overflow: 'hidden',
++  },
++  startBtnGradient: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    paddingVertical: 14,
++    gap: 8,
++  },
++  startBtnText: {
++    color: '#fff',
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.bold,
++  },
++  formCard: {
++    margin: 20,
++    marginTop: 0,
++    padding: 24,
++    backgroundColor: '#fff',
++    borderRadius: 24,
++  },
++  formHeaderRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++    marginBottom: 24,
++  },
++  formBackBtn: {
++    width: 40,
++    height: 40,
++    borderRadius: 12,
++    backgroundColor: '#f8fafc',
++    justifyContent: 'center',
++    alignItems: 'center',
++  },
++  formTitle: {
++    fontSize: SIZES.h2,
++    fontFamily: FONTS.bold,
++    color: '#1e293b',
++  },
++  inputGroup: {
++    marginBottom: 20,
++  },
++  inputLabel: {
++    fontSize: SIZES.h4,
++    fontFamily: FONTS.bold,
++    color: '#64748b',
++    marginBottom: 8,
++    marginLeft: 4,
++    textTransform: 'uppercase',
++    letterSpacing: 0.5,
++  },
++  inputWrapper: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    height: 52,
++    backgroundColor: '#f8fafc',
++    borderRadius: 16,
++    paddingHorizontal: 16,
++    borderWidth: 1.5,
++    borderColor: '#f1f5f9',
++  },
++  textInput: {
++    flex: 1,
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.medium,
++    color: '#1e293b',
++    ...(Platform.OS === 'web' && { outlineStyle: 'none' } as any),
++  },
++  inputCurrency: {
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.bold,
++    color: '#0ea5e9',
++    marginRight: 8,
++  },
++  receiverHint: {
++    fontSize: SIZES.h4,
++    fontFamily: FONTS.medium,
++    color: '#22c55e',
++    marginTop: 6,
++    marginLeft: 4,
++  },
++  warningBox: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    backgroundColor: '#fffbeb',
++    padding: 12,
++    borderRadius: 12,
++    gap: 8,
++    marginTop: 10,
++  },
++  warningText: {
++    fontSize: RFValue(8.5),
++    fontFamily: FONTS.medium,
++    color: '#92400e',
++    flex: 1,
++  },
++  footerActions: {
++    marginTop: 32,
++  },
++  mainActionBtn: {
++    height: 56,
++    borderRadius: 18,
++    overflow: 'hidden',
++  },
++  mainBtnGradient: {
++    flex: 1,
++    alignItems: 'center',
++    justifyContent: 'center',
++  },
++  mainBtnText: {
++    color: '#fff',
++    fontSize: SIZES.h3,
++    fontFamily: FONTS.bold,
+   },
+ });
+ 

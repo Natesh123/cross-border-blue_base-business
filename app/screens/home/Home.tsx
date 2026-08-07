@@ -1,5 +1,6 @@
 import { RefreshControl, ScrollView, View, BackHandler, StyleSheet, Platform, StatusBar, Alert } from "react-native";
 import React, { useEffect, useState, useCallback } from "react";
+import moment from "moment";
 import Container from "../../theme/Container";
 import WalletBalanceCard from "./components/WalletBalanceCard";
 import HomeHeader from "../../components/HomeHeader";
@@ -119,36 +120,102 @@ const Home = () => {
     try {
       if (!tokenId || !remitterId) return;
       setLoading(true);
-      const requestPayload = {
-        tokenId: tokenId,
-        remitterId: remitterId,
-        fromDate: '',
-        numberTranList: '5',
-        toDate: '',
-        tranList: 'COUNT',
-        transId: '',
-        transactionType: 'MONEY_REMITTANCE',
-        walletMode: 'Sendmoney'
-      }
-      const response = GetTransactionDetails(requestPayload);
-      response.then((res: any) => {
-        if (res.status === 200) {
-          const fixedList = (res?.data?.TransDetails || []).map((t: any) => {
-            return {
-              ...t,
-              TransactionMode:
-                !t.TransactionMode || t.TransactionMode.trim() === ""
-                  ? "E-Wallet Debit"
-                  : t.TransactionMode,
-            };
-          });
-          setRecentTransaction(fixedList);
+
+      const reqMoney = GetTransactionDetails({
+        tokenId, remitterId, fromDate: '', numberTranList: '0', toDate: '', tranList: 'COUNT', transId: '', transactionType: 'MONEY_REMITTANCE', walletMode: 'Sendmoney'
+      });
+
+      const reqWallet = GetTransactionDetails({
+        tokenId, remitterId, fromDate: '', numberTranList: '0', toDate: '', tranList: 'COUNT', transId: '', transactionType: 'WALLET', walletMode: 'Wallet Transfer'
+      });
+
+      const reqAirtime = GetTransactionDetails({
+        tokenId, remitterId, fromDate: '', numberTranList: '0', toDate: '', tranList: 'COUNT', transId: '', transactionType: 'AIRTOPUP', walletMode: 'Sendmoney'
+      });
+
+      Promise.allSettled([reqMoney, reqWallet, reqAirtime]).then((results) => {
+        let allTxns: any[] = [];
+        const res1: any = results[0].status === 'fulfilled' ? results[0].value : null;
+        const res2: any = results[1].status === 'fulfilled' ? results[1].value : null;
+        const res3: any = results[2].status === 'fulfilled' ? results[2].value : null;
+
+        if (res1?.status === 200 && res1?.data?.TransDetails) {
+          allTxns = [...allTxns, ...res1.data.TransDetails];
         }
-      })
-        .catch((err) => {
-          console.error('Fetch Transaction details error:', err.response?.data || err.message)
-        })
-        .finally(() => setLoading(false));
+        if (res2?.status === 200 && res2?.data?.TransDetails) {
+          const walletTxns = res2.data.TransDetails.map((t: any) => ({ ...t, TransactionType: 'WALLET' }));
+          allTxns = [...allTxns, ...walletTxns];
+        }
+        if (res3?.status === 200 && res3?.data?.TransDetails) {
+          allTxns = [...allTxns, ...res3.data.TransDetails];
+        }
+
+        allTxns = allTxns.map((t: any) => ({
+          ...t,
+          TransactionMode: !t.TransactionMode || t.TransactionMode.trim() === "" ? "E-Wallet Debit" : t.TransactionMode,
+        }));
+
+        // Sort by date descending reliably using London offset logic
+        const getLondonOffset = (date: Date): number => {
+          try {
+            const dtf = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/London', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false });
+            const parts = dtf.formatToParts(date);
+            const getVal = (type: string) => { const part = parts.find(p => p.type === type); return part ? parseInt(part.value, 10) : 0; };
+            const year = getVal('year'); const month = getVal('month') - 1; const day = getVal('day');
+            let hour = getVal('hour'); if (hour === 24) hour = 0;
+            const minute = getVal('minute'); const second = getVal('second');
+            const londonUTCDate = Date.UTC(year, month, day, hour, minute, second);
+            const inputUTCDate = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds());
+            return (londonUTCDate - inputUTCDate) / 60000;
+          } catch (e) { return 0; }
+        };
+
+        const parseDateSort = (txn: any) => {
+          const d = txn.TransactionDate;
+          if (!d) return 0;
+          const formats = [
+            "YYYY-MM-DDTHH:mm:ss[Z]",
+            "YYYY-MM-DDTHH:mm:ss.SSS[Z]",
+            "YYYY-MM-DD HH:mm:ss",
+            "M/D/YYYY h:mm:ss A",
+            "MM/DD/YYYY hh:mm:ss A",
+            "DD/MM/YYYY hh:mm:ss A",
+            "DD/MM/YYYY HH:mm:ss",
+            "DD-MM-YYYY hh:mm:ss A",
+            "DD-MM-YYYY HH:mm:ss",
+            "YYYY-MM-DD hh:mm:ss A",
+            "YYYY/MM/DD hh:mm:ss A",
+            "DD-MM-YYYY",
+            "DD/MM/YYYY",
+            "DD-MMM-YYYY",
+            "DD MMM, YYYY",
+            "YYYY/MM/DD",
+            "DD MMM YYYY hh:mm:ss A",
+            "DD MMM YYYY"
+          ];
+          const isWalletTxn = txn.TransactionType === 'WALLET' || txn.TransactionMode === 'E-Wallet Debit' || (txn.TransID && txn.TransID.toString().startsWith("EE"));
+
+          if (!isWalletTxn) {
+            let m = moment.utc(d, formats);
+            if (m.isValid()) {
+              const utcDate = new Date(m.format("YYYY-MM-DDTHH:mm:ss[Z]"));
+              m.subtract(getLondonOffset(utcDate), "minutes");
+              return m.valueOf();
+            }
+          }
+          let m = moment.utc(d, formats, true);
+          if (m.isValid()) return m.valueOf();
+          return moment(new Date(d)).valueOf() || 0;
+        };
+
+        allTxns.sort((a, b) => parseDateSort(b) - parseDateSort(a));
+
+        // Take top 5
+        setRecentTransaction(allTxns.slice(0, 5));
+      }).catch((err) => {
+        console.error('Fetch Transaction details error:', err);
+      }).finally(() => setLoading(false));
+
     } catch (error) {
       console.error('Error fetching Transaction details:', error);
     }

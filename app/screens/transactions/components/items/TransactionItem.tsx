@@ -38,6 +38,11 @@ const TransactionItem = ({ item }: IProps) => {
   const [transactionType, setTransactionType] =
     useState<"MONEY_REMITTANCE" | "AIRTOPUP">("MONEY_REMITTANCE");
 
+  const isWalletTxn = 
+    item.TransactionType === "WALLET" ||
+    item.TransactionMode === "E-Wallet Debit" ||
+    (item.TransID && item.TransID.toString().startsWith("EE"));
+
   // ✅ Fetch Receiver List
   const fetchReceiverList = async (tokenId: string, remitterId: string) => {
     try {
@@ -539,7 +544,7 @@ const TransactionItem = ({ item }: IProps) => {
               <Text style={[localStyles.actionBtnTxt, { color: '#0ea5e9' }]}>View</Text>
             </TouchableOpacity>
 
-            {item.TranStatus === "Success" && (
+            {item.TranStatus === "Success" && !isWalletTxn && (
               <TouchableOpacity
                 onPress={() => handleDownload(item)}
                 style={[localStyles.actionBtnSmall, { backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}
@@ -556,132 +561,316 @@ const TransactionItem = ({ item }: IProps) => {
       <Modal visible={showViewModal} transparent animationType="fade">
         <View style={localStyles.receiptOverlay}>
           <View style={localStyles.receiptCard}>
-            {/* Gradient Status Header */}
+            
+            {/* Top Stub (The Hero) */}
             <LinearGradient
               colors={
-                item.TranStatus === "Success" ? ["#10b981", "#34d399"] :
-                  item.TranStatus === "Failed" || item.TranStatus === "Rejected" ? ["#ef4444", "#fb7185"] :
-                    ["#f59e0b", "#fbbf24"]
+                item.TranStatus === "Success" ? ['#0ea5e9', '#0284c7'] :
+                  item.TranStatus === "Failed" || item.TranStatus === "Rejected" ? ["#ef4444", "#dc2626"] :
+                    ["#f59e0b", "#d97706"]
               }
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={localStyles.receiptStatusTop}
-            />
-
-            <View style={localStyles.receiptInner}>
-              <View style={localStyles.receiptHeader}>
-                <View style={localStyles.receiptIconBox}>
-                  <Vector
-                    as="materialcommunityicons"
-                    name={item.TranStatus === "Success" ? "check-decagram" : "alert-decagram"}
-                    size={36}
-                    color={item.TranStatus === "Success" ? "#10b981" : "#ef4444"}
-                  />
-                </View>
-                <Text style={localStyles.receiptStatusText}>{item.TranStatus}</Text>
-                <View style={localStyles.amountCenterBox}>
-                  <Text style={localStyles.currencySymbol}>{item.Currency}</Text>
-                  <Text style={localStyles.receiptAmountText}>{item.Amount}</Text>
-                </View>
-                <Text style={localStyles.receiptIDText}>TXN-ID: {item.TransID}</Text>
+              end={{ x: 1, y: 1 }}
+              style={localStyles.ticketStub}
+            >
+              <View style={localStyles.ticketIconBox}>
+                <Vector
+                  as="materialcommunityicons"
+                  name={item.TranStatus === "Success" ? "check-decagram" : "alert-decagram"}
+                  size={42}
+                  color="#FFF"
+                />
               </View>
+              <Text style={localStyles.ticketStatusText}>{item.TranStatus.toUpperCase()}</Text>
+              
+              <View style={localStyles.ticketAmountBox}>
+                <Text style={localStyles.ticketCurrency}>{item.Currency}</Text>
+                <Text style={localStyles.ticketAmount}>{item.Amount}</Text>
+              </View>
+              
+              <Text style={localStyles.ticketTxnId}>TXN-ID: {item.TransID}</Text>
+              
+              {/* Corner Close on the Stub */}
+              <TouchableOpacity
+                onPress={() => setShowViewModal(false)}
+                style={localStyles.ticketCloseBtn}
+              >
+                <Vector as="feather" name="x" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </LinearGradient>
 
-              <View style={localStyles.dashedLine} />
+            {/* The Tear Line */}
+            <View style={localStyles.ticketTearLineContainer}>
+               <View style={localStyles.ticketTearLeftHole} />
+               <View style={localStyles.ticketTearLine} />
+               <View style={localStyles.ticketTearRightHole} />
+            </View>
 
+            {/* Receipt Body */}
+            <View style={localStyles.ticketBody}>
               <ScrollView showsVerticalScrollIndicator={false} style={localStyles.receiptScroll}>
+                
                 {/* Information Section */}
-                <View style={localStyles.receiptSection}>
-                  <Text style={localStyles.receiptSectionTitle}>TRANSFER SPECIFICATIONS</Text>
-                  {[
-                    { label: "Execution Date", value: item.TransactionDate },
-                    { label: "Transaction Mode", value: item.TransactionMode },
-                    { label: "Transfer Type", value: item.TransferType || "Standard" },
-                  ].map((d, i) => (
-                    <View key={i} style={localStyles.receiptRow}>
-                      <Text style={localStyles.receiptRowLabel}>{d.label}</Text>
-                      <Text style={localStyles.receiptRowValue}>{d.value}</Text>
-                    </View>
-                  ))}
+                <View style={localStyles.ticketSection}>
+                  <Text style={localStyles.ticketSectionTitle}>TRANSFER SPECIFICATIONS</Text>
+                  <View style={localStyles.ticketGrid}>
+                    {[
+                      { label: "Execution Date", value: item.TransactionDate },
+                      { label: "Transaction Mode", value: item.TransactionMode },
+                      { label: "Transfer Type", value: item.TransferType || "Standard" },
+                    ].map((d, i) => (
+                      <View key={i} style={localStyles.ticketGridItem}>
+                        <Text style={localStyles.ticketGridLabel}>{d.label}</Text>
+                        <Text style={localStyles.ticketGridValue}>{d.value}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
 
                 {/* People Section */}
-                <View style={localStyles.receiptSection}>
-                  <Text style={localStyles.receiptSectionTitle}>PARTIES INVOLVED</Text>
-                  {(item.TransactionMode === "E-Wallet Debit"
-                    ? [
-                      { label: "Sender ID", value: item.SenderID },
-                      { label: "Sender Name", value: `${item.SenderFirstName} ${item.SenderLastName}` },
-                      { label: "Recipient ID", value: item.ReceiverID },
-                      { label: "Recipient Name", value: `${item.ReceiverFirstName} ${item.ReceiverLastName}` },
-                    ]
-                    : [
-                      { label: "Sender Name", value: `${item.SenderFirstName} ${item.SenderLastName}` },
-                      { label: "Recipient Name", value: `${item.ReceiverFirstName} ${item.ReceiverLastName}` },
-                      { label: "Source Country", value: item.SourceCountry },
-                      { label: "Payout Country", value: item.DestinationCountry },
-                    ]
-                  ).map((d, i) => (
-                    <View key={i} style={localStyles.receiptRow}>
-                      <Text style={localStyles.receiptRowLabel}>{d.label}</Text>
-                      <Text style={localStyles.receiptRowValue}>{d.value}</Text>
-                    </View>
-                  ))}
+                <View style={localStyles.ticketSection}>
+                  <Text style={localStyles.ticketSectionTitle}>PARTIES INVOLVED</Text>
+                  <View style={localStyles.ticketGrid}>
+                    {(item.TransactionMode === "E-Wallet Debit"
+                      ? [
+                        { label: "Sender ID", value: item.SenderID },
+                        { label: "Sender Name", value: `${item.SenderFirstName} ${item.SenderLastName}` },
+                        { label: "Recipient ID", value: item.ReceiverID },
+                        { label: "Recipient Name", value: `${item.ReceiverFirstName} ${item.ReceiverLastName}` },
+                      ]
+                      : [
+                        { label: "Sender Name", value: `${item.SenderFirstName} ${item.SenderLastName}` },
+                        { label: "Recipient Name", value: `${item.ReceiverFirstName} ${item.ReceiverLastName}` },
+                        { label: "Source Country", value: item.SourceCountry },
+                        { label: "Payout Country", value: item.DestinationCountry },
+                      ]
+                    ).map((d, i) => (
+                      <View key={i} style={localStyles.ticketGridItem}>
+                        <Text style={localStyles.ticketGridLabel}>{d.label}</Text>
+                        <Text style={localStyles.ticketGridValue}>{d.value}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
+
                 {/* Financial Details Section */}
-                <View style={[localStyles.receiptSection, { marginBottom: 30 }]}>
-                  <Text style={localStyles.receiptSectionTitle}>FINANCIAL DETAILS</Text>
-                  {[
-                    { label: "Send Amount", value: `${item.Currency}${item.Amount}` },
-                    { label: "Exchange Rate", value: `1 ${item.Currency} = 0.00` },
-                    { label: "Service Fee", value: `${item.Currency}0.00` },
-                    { label: "Total Payable", value: `${item.Currency}${item.Amount}` },
-                  ].map((d, i) => (
-                    <View key={i} style={[localStyles.receiptRow, i === 3 && localStyles.totalRow]}>
-                      <Text style={[localStyles.receiptRowLabel, i === 3 && localStyles.totalLabel]}>{d.label}</Text>
-                      <Text style={[localStyles.receiptRowValue, i === 3 && localStyles.totalValue]}>{d.value}</Text>
-                    </View>
-                  ))}
+                <View style={[localStyles.ticketSection, { marginBottom: 30 }]}>
+                  <Text style={localStyles.ticketSectionTitle}>FINANCIAL DETAILS</Text>
+                  <View style={localStyles.ticketGrid}>
+                    {[
+                      { label: "Send Amount", value: `${item.Currency}${item.Amount}` },
+                      { label: "Exchange Rate", value: `1 ${item.Currency} = 0.00` },
+                      { label: "Service Fee", value: `${item.Currency}0.00` },
+                    ].map((d, i) => (
+                      <View key={i} style={localStyles.ticketGridItem}>
+                        <Text style={localStyles.ticketGridLabel}>{d.label}</Text>
+                        <Text style={localStyles.ticketGridValue}>{d.value}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={localStyles.ticketTotalBox}>
+                    <Text style={localStyles.ticketTotalLabel}>Total Payable</Text>
+                    <Text style={localStyles.ticketTotalValue}>{item.Currency}{item.Amount}</Text>
+                  </View>
                 </View>
               </ScrollView>
 
-              <View style={localStyles.receiptFooter}>
-                <TouchableOpacity
-                  onPress={() => setShowViewModal(false)}
-                  style={localStyles.receiptPrimaryBtn}
-                >
-                  <Text style={localStyles.receiptPrimaryBtnTxt}>Done</Text>
+              {/* Actions Footer */}
+              <View style={localStyles.ticketFooter}>
+                <TouchableOpacity onPress={() => setShowViewModal(false)}>
+                  <LinearGradient colors={['#0ea5e9', '#0284c7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={localStyles.ticketPrimaryBtn}>
+                    <Text style={localStyles.ticketPrimaryBtnTxt}>Done</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
 
-                {item.TranStatus === "Success" && (
+                {item.TranStatus === "Success" && !isWalletTxn && (
                   <TouchableOpacity
                     onPress={() => {
                       setShowViewModal(false);
                       handleDownload(item);
                     }}
-                    style={localStyles.receiptSecondaryBtn}
+                    style={localStyles.ticketSecondaryBtn}
                   >
-                    <Vector as="feather" name="download" size={16} color="#64748b" />
-                    <Text style={localStyles.receiptSecondaryBtnTxt}>Download Receipt</Text>
+                    <Vector as="feather" name="download" size={16} color="#0ea5e9" />
+                    <Text style={localStyles.ticketSecondaryBtnTxt}>Download Receipt</Text>
                   </TouchableOpacity>
                 )}
               </View>
             </View>
-
-            {/* Corner Close */}
-            <TouchableOpacity
-              onPress={() => setShowViewModal(false)}
-              style={localStyles.receiptCloseBtn}
-            >
-              <Vector as="ionicons" name="close" size={20} color="#94a3b8" />
-            </TouchableOpacity>
           </View>
         </View>
-      </Modal >
+      </Modal>
     </View >
   );
 };
 
 const localStyles = StyleSheet.create({
+
+  ticketStub: {
+    padding: 30,
+    alignItems: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    position: 'relative',
+  },
+  ticketIconBox: {
+    marginBottom: 10,
+  },
+  ticketStatusText: {
+    fontSize: 12,
+    fontFamily: FONTS.bold,
+    color: 'rgba(255,255,255,0.9)',
+    letterSpacing: 2,
+    marginBottom: 5,
+  },
+  ticketAmountBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  ticketCurrency: {
+    fontSize: 24,
+    fontFamily: FONTS.bold,
+    color: '#FFF',
+    marginRight: 4,
+    marginTop: -8,
+  },
+  ticketAmount: {
+    fontSize: 48,
+    fontFamily: FONTS.bold,
+    color: '#FFF',
+    letterSpacing: -1,
+  },
+  ticketTxnId: {
+    fontSize: 10,
+    fontFamily: FONTS.medium,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 1,
+  },
+  ticketCloseBtn: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ticketTearLineContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 20,
+    backgroundColor: '#FFF',
+    overflow: 'hidden',
+  },
+  ticketTearLeftHole: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    marginLeft: -10,
+  },
+  ticketTearRightHole: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    marginRight: -10,
+  },
+  ticketTearLine: {
+    flex: 1,
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  ticketBody: {
+    backgroundColor: '#FFF',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    padding: 20,
+    flexShrink: 1,
+  },
+  ticketSection: {
+    marginBottom: 20,
+  },
+  ticketSectionTitle: {
+    fontSize: 10,
+    fontFamily: FONTS.bold,
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  ticketGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -5,
+  },
+  ticketGridItem: {
+    width: '50%',
+    padding: 5,
+    marginBottom: 10,
+  },
+  ticketGridLabel: {
+    fontSize: 10,
+    fontFamily: FONTS.medium,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  ticketGridValue: {
+    fontSize: 12,
+    fontFamily: FONTS.bold,
+    color: '#0F172A',
+  },
+  ticketTotalBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 5,
+  },
+  ticketTotalLabel: {
+    fontSize: 14,
+    fontFamily: FONTS.bold,
+    color: '#0ea5e9',
+  },
+  ticketTotalValue: {
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+    color: '#0ea5e9',
+  },
+  ticketFooter: {
+    paddingTop: 15,
+  },
+  ticketPrimaryBtn: {
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  ticketPrimaryBtnTxt: {
+    fontSize: 15,
+    fontFamily: FONTS.bold,
+    color: '#FFF',
+  },
+  ticketSecondaryBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 48,
+  },
+  ticketSecondaryBtnTxt: {
+    fontSize: 14,
+    fontFamily: FONTS.bold,
+    color: '#0ea5e9',
+    marginLeft: 8,
+  },
+
   cardContainer: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
